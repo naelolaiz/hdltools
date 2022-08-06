@@ -30,7 +30,14 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * https://davidthings.github.io/hdelk/
 
 
-The instructions in https://blog.eowyn.net/improving_netlistsvg/ does not work, because yosys doesn't have the ghdl plugin.
+The instructions in https://blog.eowyn.net/improving_netlistsvg/ 
+```
+TOP=top
+ghdl -a --std=08 ${TOP}.vhdl
+yosys -p "ghdl --std=08 ${TOP}; prep -top ${TOP}; write_json -compat-int svg.json"
+netlistsvg svg.json -o ${TOP}.svg
+```
+does not work, because yosys doesn't have the ghdl plugin.
 Those instructions refer to https://github.com/YosysHQ/fpga-toolchain , but it is not supported anymore. That project then links to https://github.com/YosysHQ/oss-cad-suite-build , which is basically the container I am using, but does not contain the plugin :(
 Plus it didn´t compile out of the box. These are the commands I needed to compile the plugin (in fact it didn´t) and yosys core in the container:
  
