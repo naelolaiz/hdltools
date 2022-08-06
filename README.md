@@ -25,4 +25,5 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * also ... https://hub.docker.com/r/hackfin/yosys ?
 * https://github.com/Nic30/hwt
 * https://github.com/Nic30/hwtGraph
+* https://blog.eowyn.net/netlistsvg/
 
