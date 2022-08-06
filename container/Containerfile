@@ -7,6 +7,13 @@ RUN pip3 install --upgrade setuptools wheel # ubuntu 18.04 apparently doesnt hav
 RUN pip3 install pillow pyscreenshot path
 RUN npm install -g netlistsvg
 
+RUN apt-get install -y git tcl-dev pkg-config clang libreadline-dev bison flex
+RUN apt-get remove --purge yosys*
+
+RUN mkdir /yosys_source && cd /yosys_source
+RUN git clone https://github.com/YosysHQ/yosys.git && make -j3 && make install
+RUN git clone https://github.com/ghdl/ghdl-yosys-plugin.git && make -j3 && make install
+
 RUN mkdir /tools
 
 COPY vcd2png.py /tools/
