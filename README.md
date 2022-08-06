@@ -15,3 +15,6 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * [**GHDL**](https://github.com/ghdl/ghdl) for analysis, synthesis and simulation.
 * [**gtkwave**](http://gtkwave.sourceforge.net/) (yes, not even https !) for simulation signals view generation 
 * [**yosys**](https://github.com/YosysHQ/yosys) for RTL diagrams generation
+
+## TODO
+* Base on https://github.com/YosysHQ/oss-cad-suite-build ?
