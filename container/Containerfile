@@ -11,11 +11,14 @@ RUN npm install -g netlistsvg
 RUN apt-get install -y git tcl-dev pkg-config clang libreadline-dev bison flex
 RUN apt-get remove -y --purge yosys*
 
-RUN mkdir /yosys_source && cd /yosys_source
-RUN git clone https://github.com/YosysHQ/yosys.git && make -j3 && make install
-RUN git clone https://github.com/ghdl/ghdl-yosys-plugin.git && make -j3 && make install
+RUN mkdir /yosys_source
+
+RUN cd /yosys_source && git clone https://github.com/YosysHQ/yosys.git && cd yosys && make -j3 && make install
+RUN cd /yosys_source && git clone https://github.com/ghdl/ghdl-yosys-plugin.git && cd ghdl-yosys-plugin && make -j3 && make install
 
 RUN mkdir /tools
 
 COPY vcd2png.py /tools/
 #COPY hdl2svg.py /tools/
+
+CMD [ "/bin/bash" ]
