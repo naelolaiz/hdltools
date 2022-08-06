@@ -10,4 +10,4 @@ RUN npm install -g netlistsvg
 RUN mkdir /tools
 
 COPY vcd2png.py /tools/
-COPY hdl2svg.py /tools/
+#COPY hdl2svg.py /tools/
