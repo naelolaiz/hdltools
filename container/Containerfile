@@ -1,0 +1,5 @@
+FROM ghdl/ghdl:ubuntu20-llvm-10
+
+RUN apt-get update
+RUN apt-get install yosys npm
+RUN npm install -g netlistsvg
