@@ -18,6 +18,8 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 
 ## TODO
 * Base it on https://github.com/YosysHQ/oss-cad-suite-build / https://hub.docker.com/r/yosyshq/cross-linux-x64 ?
+* https://hub.docker.com/r/ghdl/ghdl
+  * https://github.com/ghdl/docker
 * Check https://hdl.github.io/containers/ !!!!
 * also ... https://hub.docker.com/r/hackfin/yosys ?
 
