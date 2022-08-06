@@ -52,4 +52,4 @@ cd yosys/
 make 
 apt-get install pkg-config clang libreadline-dev bison flex
 ```
-Apparently provided version of yosys in the container is (latest release available) is not new enough for the ghdl plugin: https://github.com/ghdl/ghdl-yosys-plugin/issues/149  So both needs to be compiled from git sources :-/
+Apparently provided version of yosys in the container is (latest release available) is not new enough for the ghdl plugin: https://github.com/ghdl/ghdl-yosys-plugin/issues/149  So both needs to be compiled from git sources :-/ Then it compiles and works
