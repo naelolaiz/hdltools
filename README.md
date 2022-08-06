@@ -52,4 +52,12 @@ cd yosys/
 make 
 apt-get install pkg-config clang libreadline-dev bison flex
 ```
-Apparently provided version of yosys in the container is (latest release available) is not new enough for the ghdl plugin: https://github.com/ghdl/ghdl-yosys-plugin/issues/149  So both needs to be compiled from git sources :-/ Then it compiles and works
+Apparently provided version of yosys in the container is (latest release available) is not new enough for the ghdl plugin: https://github.com/ghdl/ghdl-yosys-plugin/issues/149  So both needs to be compiled from git sources :-/ Then it compiles.
+
+But I still have the same problem... and it is because of the lack of -m ghdl before the -p!: (https://github.com/ghdl/ghdl-yosys-plugin/blob/master/README.md)
+```
+# Synthesize the design.
+# NOTE: if GHDL is built as a module, set MODULE to '-m ghdl' or '-m path/to/ghdl.so',
+#       otherwise, unset it.
+yosys $MODULE -p 'ghdl leds; synth_ice40 -json leds.json'
+```
