@@ -28,5 +28,14 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * https://blog.eowyn.net/netlistsvg/
 * https://blog.eowyn.net/improving_netlistsvg/
 * https://davidthings.github.io/hdelk/
-* 
-
+ 
+```
+apt-get install git
+git clone https://github.com/YosysHQ/yosys.git
+git clone https://github.com/ghdl/ghdl-yosys-plugin.git
+cd ghdl-yosys-plugin/
+make
+apt-get install yosys-dev tcl-dev 
+cd yosys/
+make 
+apt-get install pkg-config clang libreadline-dev bison flex
