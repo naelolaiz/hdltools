@@ -11,3 +11,5 @@ RUN mkdir /tools
 
 COPY vcd2png.py /tools/
 #COPY hdl2svg.py /tools/
+
+CMD ["/bin/bash"]
