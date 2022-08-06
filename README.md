@@ -12,6 +12,6 @@ Based on https://github.com/ponty/sphinxcontrib-gtkwave
 Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 
 ## backends
-* **GHDL** for analysis, synthesis and simulation.
-* gtkwave for simulation signals view generatioin
-* yosys for RTL diagrams generation
+* [**GHDL**](https://github.com/ghdl/ghdl) for analysis, synthesis and simulation.
+* [**gtkwave**](http://gtkwave.sourceforge.net/) (yes, not even https !) for simulation signals view generation 
+* [**yosys**](https://github.com/YosysHQ/yosys) for RTL diagrams generation
