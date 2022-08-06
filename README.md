@@ -21,5 +21,6 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * https://hub.docker.com/r/ghdl/ghdl
   * https://github.com/ghdl/docker
 * Check https://hdl.github.io/containers/ !!!!
+  * f4pga : https://hdl.github.io/containers/ug/AllInOne.html
 * also ... https://hub.docker.com/r/hackfin/yosys ?
 
