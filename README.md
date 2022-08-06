@@ -26,4 +26,7 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * https://github.com/Nic30/hwt
 * https://github.com/Nic30/hwtGraph
 * https://blog.eowyn.net/netlistsvg/
+* https://blog.eowyn.net/improving_netlistsvg/
+* https://davidthings.github.io/hdelk/
+* 
 
