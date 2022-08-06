@@ -6,4 +6,7 @@ RUN apt-get install -y yosys npm gtkwave scrot xvfb python3-pyvirtualdisplay pyt
 RUN pip3 install --upgrade setuptools wheel # ubuntu 18.04 apparently doesnt have proper setuptools
 RUN pip3 install pillow pyscreenshot path
 RUN npm install -g netlistsvg
-COPY gtkwave_export.py /
+
+RUN mkdir /tools
+
+COPY gtkwave_export.py /tools/
