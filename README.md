@@ -17,4 +17,4 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * [**yosys**](https://github.com/YosysHQ/yosys) for RTL diagrams generation
 
 ## TODO
-* Base on https://github.com/YosysHQ/oss-cad-suite-build ?
+* Base it on https://github.com/YosysHQ/oss-cad-suite-build ?
