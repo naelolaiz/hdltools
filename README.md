@@ -23,4 +23,6 @@ Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 * Check https://hdl.github.io/containers/ !!!!
   * f4pga : https://hdl.github.io/containers/ug/AllInOne.html
 * also ... https://hub.docker.com/r/hackfin/yosys ?
+* https://github.com/Nic30/hwt
+* https://github.com/Nic30/hwtGraph
 
