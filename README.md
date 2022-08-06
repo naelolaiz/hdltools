@@ -7,7 +7,7 @@ Workaround for the gtkwave missing functionality of exporting automatically from
 
 Based on https://github.com/ponty/sphinxcontrib-gtkwave
 
-## hdl2diagram.py
+## hdl2svg.py
 **TODO**
 Script for generating .png/.svg RTL diagrams from .hdl / .v files.
 
