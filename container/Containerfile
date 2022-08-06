@@ -9,7 +9,7 @@ RUN pip3 install pillow pyscreenshot path
 RUN npm install -g netlistsvg
 
 RUN apt-get install -y git tcl-dev pkg-config clang libreadline-dev bison flex
-RUN apt-get remove --purge yosys*
+RUN apt-get remove -y --purge yosys*
 
 RUN mkdir /yosys_source && cd /yosys_source
 RUN git clone https://github.com/YosysHQ/yosys.git && make -j3 && make install
