@@ -18,6 +18,6 @@ RUN cd /yosys_source && git clone https://github.com/ghdl/ghdl-yosys-plugin.git 
 RUN mkdir /tools
 
 COPY vcd2png.py /tools/
-COPY hdl2svg /tools/
+COPY hdl2svg.sh /tools/
 
 CMD [ "/bin/bash" ]
