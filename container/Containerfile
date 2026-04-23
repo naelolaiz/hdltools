@@ -7,7 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates git make g++ python3 \
-      bison flex clang libreadline-dev pkg-config tcl-dev \
+     bison flex gawk clang libffi-dev libreadline-dev \
+      pkg-config tcl-dev zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
