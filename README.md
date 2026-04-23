@@ -1,63 +1,89 @@
-# Container with open source HDL tools
+# hdltools
 
-## vcd2png.py
-Script for converting .vcd (Value Change Dump) HDL files to .png
+Container with open-source HDL tools, plus a couple of helper scripts that
+paper over missing features in the underlying tools.
 
-Workaround for the gtkwave missing functionality of exporting automatically from the command line. It executes gtkwave on a dummy terminal, configures it with TCL, and takes a screenshot.
+## What's inside
 
-Based on https://github.com/ponty/sphinxcontrib-gtkwave
+| Tool | Purpose |
+| --- | --- |
+| [GHDL](https://github.com/ghdl/ghdl) | VHDL analysis, elaboration, simulation |
+| [Yosys](https://github.com/YosysHQ/yosys) | RTL synthesis (built from source) |
+| [ghdl-yosys-plugin](https://github.com/ghdl/ghdl-yosys-plugin) | Lets Yosys read VHDL via GHDL (built from source) |
+| [Icarus Verilog](https://github.com/steveicarus/iverilog) | Verilog simulation |
+| [GTKWave](http://gtkwave.sourceforge.net/) | Waveform viewer |
+| [netlistsvg](https://github.com/nturley/netlistsvg) | Render Yosys JSON netlists as SVG |
 
-## hdl2svg.py
-**TODO**
-Script for generating .png/.svg RTL diagrams from .hdl / .v files.
+Yosys and the GHDL plugin are compiled from `git` because the Debian/Ubuntu
+packaged Yosys is too old for the plugin
+(see [ghdl-yosys-plugin#149](https://github.com/ghdl/ghdl-yosys-plugin/issues/149)).
 
-## backends
-* [**GHDL**](https://github.com/ghdl/ghdl) for analysis, synthesis and simulation.
-* [**gtkwave**](http://gtkwave.sourceforge.net/) (yes, not even https !) for simulation signals view generation 
-* [**yosys**](https://github.com/YosysHQ/yosys) for RTL diagrams generation
+## Helper scripts
 
-## TODO
-* Base it on https://github.com/YosysHQ/oss-cad-suite-build / https://hub.docker.com/r/yosyshq/cross-linux-x64 ?
-* https://hub.docker.com/r/ghdl/ghdl
-  * https://github.com/ghdl/docker
-* Check https://hdl.github.io/containers/ !!!!
-  * f4pga : https://hdl.github.io/containers/ug/AllInOne.html
-* also ... https://hub.docker.com/r/hackfin/yosys ?
-* https://github.com/Nic30/hwt
-* https://github.com/Nic30/hwtGraph
-* https://blog.eowyn.net/netlistsvg/
-* https://blog.eowyn.net/improving_netlistsvg/
-* https://davidthings.github.io/hdelk/
+### `vcd2png.py`
 
+Converts a `.vcd` (Value Change Dump) file to a `.png` of the waveform.
 
-The instructions in https://blog.eowyn.net/improving_netlistsvg/ 
+GTKWave has no headless PNG export, so this script runs GTKWave inside a
+virtual X display (`xvfb`), drives it with a TCL script that adds every signal
+and zooms to fit, then screenshots the window. Adapted from
+[sphinxcontrib-gtkwave](https://github.com/ponty/sphinxcontrib-gtkwave).
+
 ```
-TOP=top
-ghdl -a --std=08 ${TOP}.vhdl
-yosys -p "ghdl --std=08 ${TOP}; prep -top ${TOP}; write_json -compat-int svg.json"
-netlistsvg svg.json -o ${TOP}.svg
+vcd2png.py path/to/dump.vcd
 ```
-does not work, because yosys doesn't have the ghdl plugin.
-Those instructions refer to https://github.com/YosysHQ/fpga-toolchain , but it is not supported anymore. That project then links to https://github.com/YosysHQ/oss-cad-suite-build , which is basically the container I am using, but does not contain the plugin :(
-Plus it didn´t compile out of the box. These are the commands I needed to compile the plugin (in fact it didn´t) and yosys core in the container:
- 
-```
-apt-get install git
-git clone https://github.com/YosysHQ/yosys.git
-git clone https://github.com/ghdl/ghdl-yosys-plugin.git
-cd ghdl-yosys-plugin/
-make
-apt-get install yosys-dev tcl-dev 
-cd yosys/
-make 
-apt-get install pkg-config clang libreadline-dev bison flex
-```
-Apparently provided version of yosys in the container is (latest release available) is not new enough for the ghdl plugin: https://github.com/ghdl/ghdl-yosys-plugin/issues/149  So both needs to be compiled from git sources :-/ Then it compiles.
 
-But I still have the same problem... and it is because of the lack of -m ghdl before the -p!: (https://github.com/ghdl/ghdl-yosys-plugin/blob/master/README.md)
+The output is written next to the input as `gtkwave_<basename>.png`.
+
+### `vhd2svg.sh`
+
+Generates an SVG schematic from a single VHDL file. The file must contain an
+entity with the same name as the file (minus the `.vhd` extension).
+
 ```
-# Synthesize the design.
-# NOTE: if GHDL is built as a module, set MODULE to '-m ghdl' or '-m path/to/ghdl.so',
-#       otherwise, unset it.
-yosys $MODULE -p 'ghdl leds; synth_ice40 -json leds.json'
+vhd2svg.sh input.vhd [output.svg]
 ```
+
+Under the hood it runs:
+
+```
+ghdl -a --std=08 input.vhd
+yosys -m ghdl -p 'ghdl --std=08 <entity>; prep -top <entity>; write_json -compat-int <entity>_svg.json'
+netlistsvg <entity>_svg.json -o <entity>_diagram.svg
+```
+
+The `-m ghdl` flag is what loads the GHDL plugin into Yosys — easy to miss,
+see the
+[ghdl-yosys-plugin README](https://github.com/ghdl/ghdl-yosys-plugin/blob/master/README.md).
+
+## Building the container
+
+```
+podman build -t hdltools -f container/Containerfile .
+# or: docker build -t hdltools -f container/Containerfile .
+```
+
+The CI workflow (`.github/workflows/docker-image.yml`) currently only verifies
+that the image builds; it does not push to a registry.
+
+## Running
+
+Mount your working directory and run the tool you want:
+
+```
+podman run --rm -it -v "$PWD:/work" -w /work hdltools /tools/vhd2svg.sh my_design.vhd
+podman run --rm -it -v "$PWD:/work" -w /work hdltools /tools/vcd2png.py my_dump.vcd
+```
+
+## Ideas / TODO
+
+- Base the image on [oss-cad-suite-build](https://github.com/YosysHQ/oss-cad-suite-build)
+  or [ghdl/docker](https://github.com/ghdl/docker) instead of installing
+  things by hand.
+- Survey [hdl/containers](https://hdl.github.io/containers/) — in particular
+  [f4pga](https://hdl.github.io/containers/ug/AllInOne.html).
+- Look at alternative RTL visualisers:
+  [hwtGraph](https://github.com/Nic30/hwtGraph),
+  [hdelk](https://davidthings.github.io/hdelk/),
+  and the netlistsvg tips at
+  [eowyn.net](https://blog.eowyn.net/improving_netlistsvg/).
