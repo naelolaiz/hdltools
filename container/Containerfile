@@ -2,7 +2,7 @@ FROM ghdl/ghdl:ubuntu20-llvm-10
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update
-RUN apt-get install -y yosys npm gtkwave scrot xvfb python3-pyvirtualdisplay python3-pip
+RUN apt-get install -y yosys iverilog npm gtkwave scrot xvfb python3-pyvirtualdisplay python3-pip
 RUN pip3 install --upgrade setuptools wheel # ubuntu 18.04 apparently doesnt have proper setuptools
 RUN pip3 install pillow pyscreenshot path
 RUN npm install -g netlistsvg
