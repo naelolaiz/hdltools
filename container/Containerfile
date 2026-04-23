@@ -12,7 +12,7 @@ RUN apt-get remove -y --purge yosys*
 
 RUN mkdir /yosys_source
 
-RUN cd /yosys_source && git clone https://github.com/YosysHQ/yosys.git && cd yosys && make -j$(nproc) && make install
+RUN cd /yosys_source && git clone --recurse-submodules https://github.com/YosysHQ/yosys.git && cd yosys && make -j$(nproc) && make install
 RUN cd /yosys_source && git clone https://github.com/ghdl/ghdl-yosys-plugin.git && cd ghdl-yosys-plugin && make -j$(nproc) && make install
 
 RUN mkdir /tools
