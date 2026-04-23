@@ -1,23 +1,46 @@
-FROM ghdl/ghdl:ubuntu20-llvm-10
+# syntax=docker/dockerfile:1
+
+# ---- Build Yosys + ghdl-yosys-plugin from source in a throwaway stage ----
+FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04 AS yosys-builder
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update
-RUN apt-get install -y yosys iverilog npm gtkwave scrot xvfb python3-pyvirtualdisplay python3-pip
-RUN pip3 install --upgrade setuptools wheel # ubuntu 18.04 apparently doesnt have proper setuptools
-RUN pip3 install pillow pyscreenshot path
-RUN npm install -g netlistsvg
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates git make g++ python3 \
+      bison flex gawk clang libffi-dev libreadline-dev \
+      pkg-config tcl-dev zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get install -y git tcl-dev pkg-config clang libreadline-dev bison flex
-RUN apt-get remove -y --purge yosys*
+WORKDIR /src
+RUN git clone --depth 1 --recurse-submodules --shallow-submodules \
+      https://github.com/YosysHQ/yosys.git \
+ && make -C yosys -j"$(nproc)" \
+ && make -C yosys install
 
-RUN mkdir /yosys_source
+RUN git clone --depth 1 https://github.com/ghdl/ghdl-yosys-plugin.git \
+ && make -C ghdl-yosys-plugin -j"$(nproc)" \
+ && make -C ghdl-yosys-plugin install
 
-RUN cd /yosys_source && git clone --recurse-submodules https://github.com/YosysHQ/yosys.git && cd yosys && make -j$(nproc) && make install
-RUN cd /yosys_source && git clone https://github.com/ghdl/ghdl-yosys-plugin.git && cd ghdl-yosys-plugin && make -j$(nproc) && make install
 
-RUN mkdir /tools
+# ---- Runtime image ----
+FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY vcd2png.py /tools/
-COPY vhd2svg.sh /tools/
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      gtkwave iverilog scrot xvfb \
+      nodejs npm \
+      python3 python3-pil python3-pip \
+      libreadline8 libtcl8.6 \
+ && pip3 install --no-cache-dir \
+      easyprocess path pyscreenshot pyvirtualdisplay \
+ && npm install -g --no-fund --no-audit netlistsvg \
+ && npm cache clean --force \
+ && rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache
 
-CMD [ "/bin/bash" ]
+COPY --from=yosys-builder /usr/local/bin/yosys* /usr/local/bin/
+COPY --from=yosys-builder /usr/local/share/yosys/ /usr/local/share/yosys/
+
+COPY vcd2png.py vhd2svg.sh /tools/
+
+CMD ["/bin/bash"]
