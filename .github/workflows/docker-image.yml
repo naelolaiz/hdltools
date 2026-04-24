@@ -12,6 +12,12 @@ name: Create and publish a Docker image
 on:
   push:
     branches: ['main']
+  pull_request:
+    paths:
+      - 'container/**'
+      - '.github/workflows/docker-image.yml'
+      - 'vcd2png.py'
+      - 'vhd2svg.sh'
 
 env:
   REGISTRY: ghcr.io
@@ -28,8 +34,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      # Needed so docker/build-push-action can export GHA cache (the default
+      # docker driver has no cache-to support).
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -37,22 +49,67 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # Every push to main updates :latest and :release so downstream
           # repos pinning :release actually get new builds, plus a
           # content-addressed :sha-<SHA> tag for reproducibility.
           tags: |
-            type=raw,value=latest
-            type=raw,value=release
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=release,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - name: Build image for testing (not pushed)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: container/Containerfile
+          load: true
+          tags: hdltools:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the built image
+        run: |
+          set -euxo pipefail
+          IMG=hdltools:ci-test
+
+          # 1. Toolchain + HDL tool presence. Any missing tool fails the job.
+          docker run --rm "$IMG" bash -c '
+            set -e
+            for t in make cmake gcc g++ git pkg-config bison flex patch xz \
+                     tar awk sed find python3 perl \
+                     ghdl yosys iverilog gtkwave netlistsvg Xvfb scrot tclsh; do
+              command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
+            done
+          '
+
+          # 2. Python deps needed by /tools/vcd2png.py.
+          docker run --rm "$IMG" python3 -c '
+          from pyvirtualdisplay.smartdisplay import SmartDisplay
+          from easyprocess import EasyProcess
+          from PIL import ImageFilter
+          from path import Path
+          '
+
+          # 3. Real yosys+ghdl synthesis on a minimal entity.
+          # Guards against GHDL_PREFIX / library-path regressions and
+          # ghdl-yosys-plugin API skew with the base ghdl version.
+          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+            set -e
+            mkdir -p /tmp/out
+            yosys -m ghdl -p "ghdl --std=08 /test/ping.vhd -e ping; prep -top ping; write_json -compat-int /tmp/out/ping.json"
+            test -s /tmp/out/ping.json
+          '
+
+      - name: Push image (only on push to main)
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: container/Containerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
