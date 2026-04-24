@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates git make g++ python3 \
-     bison flex gawk clang libffi-dev libreadline-dev \
+      bison flex gawk clang libffi-dev libfl-dev libreadline-dev \
       pkg-config tcl-dev zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
@@ -17,7 +17,11 @@ RUN git clone --depth 1 --recurse-submodules --shallow-submodules \
  && make -C yosys -j"$(nproc)" \
  && make -C yosys install
 
-RUN git clone --depth 1 https://github.com/ghdl/ghdl-yosys-plugin.git \
+# Pinned: commit just before the plugin started calling Sname_Index / get_sname_index,
+# which aren't in the ghdl 6.0.0 base image. Bump when the base ghdl version is bumped.
+ARG GHDL_YOSYS_PLUGIN_REF=07a30ed39fb6a078f1bf7e9e88ce9ed712380ec2
+RUN git clone https://github.com/ghdl/ghdl-yosys-plugin.git \
+ && git -C ghdl-yosys-plugin checkout "$GHDL_YOSYS_PLUGIN_REF" \
  && make -C ghdl-yosys-plugin -j"$(nproc)" \
  && make -C ghdl-yosys-plugin install
 
@@ -31,7 +35,7 @@ RUN apt-get update \
       gtkwave iverilog scrot xvfb \
       nodejs npm \
       python3 python3-pil python3-pip \
-      libreadline8 libtcl8.6 \
+      libfl2 libreadline8 libtcl8.6 \
  && pip3 install --no-cache-dir \
       easyprocess path pyscreenshot pyvirtualdisplay \
  && npm install -g --no-fund --no-audit netlistsvg \
