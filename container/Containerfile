@@ -31,11 +31,12 @@ FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # libghdl has its std/ieee path baked in from GHDL's own CI build
-# (/home/runner/work/ghdl/ghdl/...). We override with GHDL_PREFIX, but we
-# don't want to hardcode the vendor-specific base-image layout: the real
-# path is discovered at image-build time via `ghdl --disp-config` and
-# exposed under a stable FHS location so GHDL_PREFIX below stays valid
-# even if the base image ever reorganizes.
+# (/home/runner/work/ghdl/ghdl/...) so the yosys -m ghdl pipeline can't
+# find the VHDL standard libraries unless we set GHDL_PREFIX to the real
+# location inside the pinned base image. If the base image layout ever
+# changes, the CI smoke test in docker-image.yml fails loudly before the
+# image is published.
+ENV GHDL_PREFIX=/opt/ghdl/lib/ghdl
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -53,12 +54,6 @@ RUN apt-get update \
 
 COPY --from=yosys-builder /usr/local/bin/yosys* /usr/local/bin/
 COPY --from=yosys-builder /usr/local/share/yosys/ /usr/local/share/yosys/
-
-# Resolve ghdl's real library prefix and expose it via a stable FHS path.
-RUN GHDL_REAL_PREFIX="$(ghdl --disp-config 2>&1 | awk '/^library prefix:/ {print $3; exit}')" \
- && test -n "$GHDL_REAL_PREFIX" -a -d "$GHDL_REAL_PREFIX/std" \
- && ln -sfn "$GHDL_REAL_PREFIX" /usr/lib/ghdl
-ENV GHDL_PREFIX=/usr/lib/ghdl
 
 COPY vcd2png.py vhd2svg.sh /tools/
 
