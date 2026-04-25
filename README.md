@@ -67,8 +67,17 @@ podman build -t hdltools -f container/Containerfile .
 # or: docker build -t hdltools -f container/Containerfile .
 ```
 
-The CI workflow (`.github/workflows/docker-image.yml`) currently only verifies
-that the image builds; it does not push to a registry.
+CI builds and publishes the image to GitHub Container Registry on every push to
+`main` (see `.github/workflows/docker-image.yml`).
+
+### Published tags
+
+| Tag | What it is |
+| --- | --- |
+| `ghcr.io/naelolaiz/hdltools:latest`  | latest build from `main` (rolling) |
+| `ghcr.io/naelolaiz/hdltools:release` | same as `latest`; what downstream repos pin to |
+| `ghcr.io/naelolaiz/hdltools:sha-<short>` | content-addressed per commit |
+| `ghcr.io/naelolaiz/hdltools:vcd2png` | **legacy backup** — last image that still bundled the GTKWave/Xvfb-based `vcd2png.py` (commit `a146717`). Kept as a parking spot for anyone still pinning to that pipeline. New work uses `:release` and the `waveview` tool inside it. |
 
 ## Running
 
