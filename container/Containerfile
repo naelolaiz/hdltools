@@ -42,12 +42,14 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake git pkg-config patch xz-utils \
       tcl bison flex \
-      gtkwave iverilog scrot xvfb \
+      iverilog \
       nodejs npm \
-      python3 python3-pil python3-pip \
+      python3 python3-pip python3-cairo python3-yaml \
+      fonts-dejavu-core \
       libfl2 libreadline8 libtcl8.6 \
+ && pip3 install --no-cache-dir --upgrade pip setuptools wheel \
  && pip3 install --no-cache-dir \
-      easyprocess path pyscreenshot pyvirtualdisplay \
+      'pywellen ~= 0.20' \
  && npm install -g --no-fund --no-audit netlistsvg \
  && npm cache clean --force \
  && rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache
@@ -55,6 +57,8 @@ RUN apt-get update \
 COPY --from=yosys-builder /usr/local/bin/yosys* /usr/local/bin/
 COPY --from=yosys-builder /usr/local/share/yosys/ /usr/local/share/yosys/
 
-COPY vcd2png.py vhd2svg.sh /tools/
+COPY vhd2svg.sh /tools/
+COPY waveview/ /tools/waveview/
+RUN pip3 install --no-cache-dir /tools/waveview/
 
 CMD ["/bin/bash"]
