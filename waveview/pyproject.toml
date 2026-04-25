@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waveview"
+version = "0.1.0"
+description = "Headless, deterministic waveform renderer for VCD/FST/GHW dumps"
+requires-python = ">=3.9"
+license = { text = "GPL-3.0-or-later" }
+dependencies = [
+    "pywellen ~= 0.20",
+    "pyyaml >= 6",
+    "pycairo >= 1.20",
+]
+
+[project.scripts]
+waveview = "waveview.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest >= 7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+waveview = ["py.typed"]

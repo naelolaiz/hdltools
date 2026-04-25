@@ -16,7 +16,7 @@ on:
     paths:
       - 'container/**'
       - '.github/workflows/docker-image.yml'
-      - 'vcd2png.py'
+      - 'waveview/**'
       - 'vhd2svg.sh'
 
 env:
@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       # Needed so docker/build-push-action can export GHA cache (the default
       # docker driver has no cache-to support).
@@ -80,20 +80,30 @@ jobs:
             set -e
             for t in make cmake gcc g++ git pkg-config bison flex patch xz \
                      tar awk sed find python3 perl \
-                     ghdl yosys iverilog gtkwave netlistsvg Xvfb scrot tclsh; do
+                     ghdl yosys iverilog netlistsvg waveview; do
               command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
             done
           '
 
-          # 2. Python deps needed by /tools/vcd2png.py.
-          docker run --rm "$IMG" python3 -c '
-          from pyvirtualdisplay.smartdisplay import SmartDisplay
-          from easyprocess import EasyProcess
-          from PIL import ImageFilter
-          from path import Path
+          # 2. waveview imports cleanly (catches missing pywellen/pycairo/yaml).
+          docker run --rm "$IMG" python3 -c 'import waveview, pywellen, cairo, yaml'
+          docker run --rm "$IMG" waveview --version
+
+          # 3. End-to-end render: GHDL produces a tiny VCD, waveview turns it
+          # into an SVG. Catches parser/renderer regressions before publish.
+          docker run --rm -v "$PWD/waveview/tests/data:/in:ro" "$IMG" bash -c '
+            set -e
+            cd /tmp
+            cp /in/smoke.vhd .
+            ghdl -a smoke.vhd
+            ghdl -e smoke
+            ghdl -r smoke --vcd=smoke.vcd --stop-time=200ns
+            waveview smoke.vcd --output smoke.svg
+            test -s smoke.svg
+            grep -q "<svg" smoke.svg
           '
 
-          # 3. Real yosys+ghdl synthesis on a minimal entity.
+          # 4. Real yosys+ghdl synthesis on a minimal entity.
           # Guards against GHDL_PREFIX / library-path regressions and
           # ghdl-yosys-plugin API skew with the base ghdl version.
           docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '

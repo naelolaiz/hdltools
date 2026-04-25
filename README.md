@@ -11,8 +11,8 @@ paper over missing features in the underlying tools.
 | [Yosys](https://github.com/YosysHQ/yosys) | RTL synthesis (built from source) |
 | [ghdl-yosys-plugin](https://github.com/ghdl/ghdl-yosys-plugin) | Lets Yosys read VHDL via GHDL (built from source) |
 | [Icarus Verilog](https://github.com/steveicarus/iverilog) | Verilog simulation |
-| [GTKWave](http://gtkwave.sourceforge.net/) | Waveform viewer |
 | [netlistsvg](https://github.com/nturley/netlistsvg) | Render Yosys JSON netlists as SVG |
+| [pywellen](https://github.com/ekiwi/wellen) + [pycairo](https://pycairo.readthedocs.io/) | Parser + renderer used by `waveview` |
 
 Yosys and the GHDL plugin are compiled from `git` because the Debian/Ubuntu
 packaged Yosys is too old for the plugin
@@ -20,20 +20,24 @@ packaged Yosys is too old for the plugin
 
 ## Helper scripts
 
-### `vcd2png.py`
+### `waveview`
 
-Converts a `.vcd` (Value Change Dump) file to a `.png` of the waveform.
-
-GTKWave has no headless PNG export, so this script runs GTKWave inside a
-virtual X display (`xvfb`), drives it with a TCL script that adds every signal
-and zooms to fit, then screenshots the window. Adapted from
-[sphinxcontrib-gtkwave](https://github.com/ponty/sphinxcontrib-gtkwave).
+Headless, deterministic waveform renderer. Reads `.vcd` / `.fst` / `.ghw`
+(via [pywellen](https://github.com/ekiwi/wellen)) and writes SVG primary,
+PNG via `--png`. No X server, no GTKWave, no screenshotting — pure parser
++ Cairo. Optional sidecar YAML controls signal selection, ordering,
+grouping, value formatting, and time window. Full docs in
+[`waveview/README.md`](waveview/README.md).
 
 ```
-vcd2png.py path/to/dump.vcd
+waveview path/to/dump.vcd                       # writes dump.svg next to input
+waveview dump.vcd --png                          # also dump.png
+waveview dump.vcd --zoom-range 0 200000          # native time units
+waveview dump.vcd --config view.yaml --output …
 ```
 
-The output is written next to the input as `gtkwave_<basename>.png`.
+`waveview` is also importable as a Python package — `WaveformSource` is the
+parser-layer abstraction the future virtual-board renderer will reuse.
 
 ### `vhd2svg.sh`
 
@@ -72,7 +76,7 @@ Mount your working directory and run the tool you want:
 
 ```
 podman run --rm -it -v "$PWD:/work" -w /work hdltools /tools/vhd2svg.sh my_design.vhd
-podman run --rm -it -v "$PWD:/work" -w /work hdltools /tools/vcd2png.py my_dump.vcd
+podman run --rm -it -v "$PWD:/work" -w /work hdltools waveview my_dump.vcd
 ```
 
 ## Ideas / TODO
