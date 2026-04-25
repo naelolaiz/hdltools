@@ -51,19 +51,11 @@ class WaveformSource:
         return self._hier.timescale().unit.to_exponent()
 
     def t_min(self) -> int:
-        return 0
+        return int(self._wave.time_table[0])
 
     def t_max(self) -> int:
         if self._t_max_cached is None:
-            t_max = 0
-            for ref in self._refs.values():
-                sig = self._wave.get_signal_from_path(ref.full_path)
-                last_t = 0
-                for t, _ in sig.all_changes():
-                    last_t = t
-                if last_t > t_max:
-                    t_max = last_t
-            self._t_max_cached = t_max
+            self._t_max_cached = int(self._wave.time_table[-1])
         return self._t_max_cached
 
     def signals(self) -> Sequence[SignalRef]:

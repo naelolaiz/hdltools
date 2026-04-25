@@ -40,21 +40,53 @@ class ResolvedView:
     t_to: int
 
 
+def _common_top_prefix(paths: List[str]) -> str:
+    """Shared first dot-component (with trailing dot) across paths, or ''."""
+    if not paths:
+        return ""
+    first, _, _ = paths[0].partition(".")
+    if not first or first == paths[0]:
+        return ""
+    candidate = first + "."
+    for p in paths:
+        if not p.startswith(candidate):
+            return ""
+    return candidate
+
+
 def resolve(src: WaveformSource, config: ViewConfig) -> ResolvedView:
     """Bind YAML signal paths to actual SignalRefs and clamp the time window."""
     groups_in = config.groups or default_groups_for(src.signals())
 
-    resolved_groups: List[Tuple[Optional[str], List[Tuple[SignalRef, str, str, Optional[str]]]]] = []
+    # Pass 1: bind signals, remember which labels were user-supplied vs default.
+    intermediate: List[Tuple[Optional[str], List[Tuple[SignalRef, Optional[str], str, Optional[str]]]]] = []
     for g in groups_in:
-        rows: List[Tuple[SignalRef, str, str, Optional[str]]] = []
+        rows: List[Tuple[SignalRef, Optional[str], str, Optional[str]]] = []
         for s in g.signals:
             try:
                 ref = src.find(s.path)
             except KeyError:
                 raise KeyError(f"signal not found in dump: {s.path!r}")
-            label = s.label or ref.full_path
-            rows.append((ref, label, s.format, s.color))
-        resolved_groups.append((g.name, rows))
+            rows.append((ref, s.label, s.format, s.color))
+        intermediate.append((g.name, rows))
+
+    # Pass 2: strip a shared top-level scope from default labels only.
+    all_paths = [ref.full_path for _, rows in intermediate for ref, _, _, _ in rows]
+    prefix = _common_top_prefix(all_paths)
+
+    resolved_groups: List[Tuple[Optional[str], List[Tuple[SignalRef, str, str, Optional[str]]]]] = []
+    for name, rows in intermediate:
+        out_rows: List[Tuple[SignalRef, str, str, Optional[str]]] = []
+        for ref, user_label, fmt, color in rows:
+            if user_label is not None:
+                label = user_label
+            elif prefix and ref.full_path.startswith(prefix):
+                stripped = ref.full_path[len(prefix):]
+                label = stripped or ref.full_path
+            else:
+                label = ref.full_path
+            out_rows.append((ref, label, fmt, color))
+        resolved_groups.append((name, out_rows))
 
     t_from = config.time_window[0] if config.time_window[0] is not None else src.t_min()
     t_to = config.time_window[1] if config.time_window[1] is not None else src.t_max()
@@ -161,15 +193,34 @@ def _draw_trace(view: ResolvedView, track: Track, geom: Geometry, ctx: cairo.Con
     top = track.y + 4
     bot = track.y + row_h - 4
 
-    events: List[Tuple[int, Optional[int]]] = []
-    for t, raw in src.events(sig):
-        try:
-            events.append((int(t), int(raw)))
-        except ValueError:
-            # raw is a non-binary string (x/z/u/h/l/w/-) → unknown segment
-            events.append((int(t), None))
+    if t_to <= t_from:
+        return
 
-    if not events:
+    # Pixel-resolution sampling: 2 samples per render-pixel column. Bounded by
+    # render width regardless of the dump's event count, so a 50 MB VCD with
+    # millions of toggles costs the same to render as a 50 KB one. Each sample
+    # is a value_at_time(), which pywellen serves from a sorted time table in
+    # O(log E). Sub-pixel transitions get coalesced — acceptable at SVG/PNG
+    # resolution; we are not building an interactive zoomable viewer here.
+    n_samples = max(geom.trace_w * 2, 64)
+    span = t_to - t_from
+    cursor = src.cursor()
+    samples: List[Tuple[int, Optional[int]]] = []
+    for i in range(n_samples + 1):
+        t = t_from + (i * span) // n_samples
+        cursor.step_to(t)
+        samples.append((t, cursor.value_int(sig)))
+
+    # Compress consecutive equal-value samples into (start_t, end_t, value) segments.
+    segments: List[Tuple[int, int, Optional[int]]] = []
+    seg_start_t, seg_v = samples[0]
+    for t, v in samples[1:]:
+        if v != seg_v:
+            segments.append((seg_start_t, t, seg_v))
+            seg_start_t, seg_v = t, v
+    segments.append((seg_start_t, t_to, seg_v))
+
+    if all(v is None for _, _, v in segments):
         ctx.set_source_rgb(0.6, 0.6, 0.6)
         ctx.set_dash([3, 3])
         ctx.set_line_width(1)
@@ -178,17 +229,6 @@ def _draw_trace(view: ResolvedView, track: Track, geom: Geometry, ctx: cairo.Con
         ctx.stroke()
         ctx.set_dash([])
         return
-
-    # Build (start_t, end_t, value) segments clipped to [t_from, t_to].
-    segments: List[Tuple[int, int, Optional[int]]] = []
-    for i, (t, v) in enumerate(events):
-        seg_end = events[i + 1][0] if i + 1 < len(events) else t_to
-        seg_start = t
-        if seg_end <= t_from or seg_start >= t_to:
-            continue
-        seg_start = max(seg_start, t_from)
-        seg_end = min(seg_end, t_to)
-        segments.append((seg_start, seg_end, v))
 
     if sig.width <= 1:
         _draw_bit_trace(segments, geom, ctx, top, bot, color)
