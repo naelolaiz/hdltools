@@ -28,8 +28,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Output SVG path. Defaults to <input_dir>/<input_stem>.svg.")
     p.add_argument("--png", action="store_true",
                    help="Also emit <output_stem>.png alongside the SVG.")
-    p.add_argument("--zoom-range", type=int, nargs=2, metavar=("FROM", "TO"),
-                   help="Time window in the dump's native units. Overrides any time_window in the YAML.")
+    p.add_argument("--zoom-range", type=str, nargs=2, metavar=("FROM", "TO"),
+                   help="Time window for the rendered axis. Each value is either a plain "
+                        "integer in the dump's native units (typically fs for GHDL) or an "
+                        "SI-suffixed literal: 1ms, 100us, 50ns, 200ps, 5fs. Overrides any "
+                        "time_window in the YAML. The axis tick unit auto-adapts to the "
+                        "selected window — zoom in to ns/ps/fs, out to us/ms.")
     p.add_argument("--width", type=int, help="Render width in px (overrides config).")
     p.add_argument("-v", "--verbose", action="store_true", help="DEBUG-level logging.")
     p.add_argument("--version", action="version", version=f"waveview {__version__}")
@@ -72,7 +76,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         config = replace(config, width=args.width)
     if args.zoom_range is not None:
         from dataclasses import replace
-        config = replace(config, time_window=(int(args.zoom_range[0]), int(args.zoom_range[1])))
+        from waveview.config import parse_time
+        try:
+            lo = parse_time(args.zoom_range[0], src.time_unit_exponent)
+            hi = parse_time(args.zoom_range[1], src.time_unit_exponent)
+        except ValueError as exc:
+            print(f"waveview: bad --zoom-range: {exc}", file=sys.stderr)
+            return 1
+        config = replace(config, time_window=(lo, hi))
 
     try:
         view = resolve(src, config)
