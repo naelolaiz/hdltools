@@ -100,27 +100,53 @@ def pick_tick_step(t_from: int, t_to: int, target_ticks: int = 10) -> int:
 
 
 _SI_PREFIXES = [
-    (-15, "f"),
-    (-12, "p"),
-    (-9, "n"),
-    (-6, "u"),
-    (-3, "m"),
     (0, ""),
+    (-3, "m"),
+    (-6, "u"),
+    (-9, "n"),
+    (-12, "p"),
+    (-15, "f"),
 ]
 
 
-def format_time(value: int, time_unit_exponent: int) -> str:
-    """Render a time value as an SI-prefixed string in seconds."""
+def pick_axis_unit(step: int, time_unit_exponent: int) -> Tuple[int, str]:
+    """Pick a single SI prefix for the whole axis based on tick step.
+
+    Iterates from the LARGEST unit (seconds) downward and returns the first
+    one for which `step` is an exact integer multiple. This guarantees every
+    tick label renders as a clean integer in that unit — no mix of "200ns"
+    and "2.5e+08fs" on the same axis.
+    """
+    for prefix_exp, prefix in _SI_PREFIXES:
+        diff = time_unit_exponent - prefix_exp
+        if diff > 0:
+            continue  # prefix smaller than dump unit — would inflate every value
+        divisor = 10 ** (-diff)
+        if step >= divisor and step % divisor == 0:
+            return prefix_exp, prefix
+    # Fallback: dump's native unit, even if the SI table doesn't cover it.
+    for exp, prefix in _SI_PREFIXES:
+        if exp == time_unit_exponent:
+            return exp, prefix
+    return time_unit_exponent, ""
+
+
+def format_time(value: int, time_unit_exponent: int, prefix_exp: int, prefix: str) -> str:
+    """Render a time value as `<n><prefix>s` using only integer arithmetic."""
     if value == 0:
         return "0"
-    # Normalize to seconds
-    abs_value = abs(value) * (10 ** time_unit_exponent)
     sign = "-" if value < 0 else ""
-    for exp, prefix in _SI_PREFIXES:
-        scale = 10 ** exp
-        if abs_value >= scale:
-            n = abs_value / scale
-            if n == int(n):
-                return f"{sign}{int(n)}{prefix}s"
-            return f"{sign}{n:g}{prefix}s"
-    return f"{value}"
+    av = abs(value)
+    diff = time_unit_exponent - prefix_exp
+    if diff <= 0:
+        divisor = 10 ** (-diff)
+        q, r = divmod(av, divisor)
+        if r == 0:
+            return f"{sign}{q}{prefix}s"
+        # Non-exact division — show as decimal with limited precision instead of scientific.
+        whole = av // divisor
+        frac = av - whole * divisor
+        # 6 significant digits is enough for any realistic waveform tick label.
+        return f"{sign}{whole}.{frac:0{len(str(divisor)) - 1}d}".rstrip("0").rstrip(".") + f"{prefix}s"
+    # Smaller prefix than the dump unit (e.g. ns dump rendered in fs): always integer.
+    return f"{sign}{av * (10 ** diff)}{prefix}s"

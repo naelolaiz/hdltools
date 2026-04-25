@@ -17,6 +17,7 @@ from waveview.layout import (
     Track,
     format_time,
     lay_out,
+    pick_axis_unit,
     pick_tick_step,
 )
 from waveview.source import SignalRef, WaveformSource
@@ -133,6 +134,7 @@ def _draw(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> None:
 def _draw_time_axis(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> None:
     step = pick_tick_step(geom.t_from, geom.t_to)
     exp = view.src.time_unit_exponent
+    prefix_exp, prefix = pick_axis_unit(step, exp)
 
     ctx.set_source_rgb(*GRID_COLOR)
     ctx.set_line_width(1)
@@ -149,7 +151,7 @@ def _draw_time_axis(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> N
         ctx.move_to(x, 24)
         ctx.line_to(x, 28)
         ctx.stroke()
-        label = format_time(t, exp)
+        label = format_time(t, exp, prefix_exp, prefix)
         _, _, tw, _, _, _ = ctx.text_extents(label)
         ctx.move_to(int(x - tw / 2), 18)
         ctx.show_text(label)
