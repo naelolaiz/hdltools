@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import cairo
 
+from waveview.brackets import BracketSpec, compute_brackets
 from waveview.config import GroupSpec, SignalSpec, ViewConfig, default_groups_for
 from waveview.format import format_value
 from waveview.layout import (
+    BRACKET_LANE_W,
     GROUP_HEADER_H,
+    LABEL_MAX_W,
+    LABEL_MIN_W,
     LEFT_PAD,
+    BracketBlock,
     Geometry,
     Track,
     format_time,
@@ -25,11 +31,22 @@ from waveview.source import SignalRef, WaveformSource
 FONT_FAMILY = "DejaVu Sans Mono"
 FONT_SIZE = 11
 GROUP_FONT_SIZE = 12
+BRACKET_FONT_SIZE = 10
 DEFAULT_TRACE_COLOR = (0.0, 0.6, 0.0)
 UNKNOWN_COLOR = (0.85, 0.15, 0.15)
 GRID_COLOR = (0.85, 0.85, 0.85)
 TEXT_COLOR = (0.05, 0.05, 0.05)
 GROUP_BG = (0.93, 0.93, 0.96)
+
+# Bracket lane colors cycle by depth so nested levels are visually distinct.
+BRACKET_PALETTE: Tuple[Tuple[float, float, float], ...] = (
+    (0.20, 0.45, 0.85),  # blue
+    (0.85, 0.45, 0.20),  # orange
+    (0.55, 0.30, 0.75),  # purple
+    (0.20, 0.65, 0.55),  # teal
+    (0.85, 0.55, 0.15),  # amber
+    (0.45, 0.45, 0.55),  # slate
+)
 
 
 @dataclass
@@ -37,29 +54,20 @@ class ResolvedView:
     src: WaveformSource
     config: ViewConfig
     groups: List[Tuple[Optional[str], List[Tuple[SignalRef, str, str, Optional[str]]]]]
+    brackets_per_group: List[List[BracketSpec]]
     t_from: int
     t_to: int
 
 
-def _common_top_prefix(paths: List[str]) -> str:
-    """Shared first dot-component (with trailing dot) across paths, or ''."""
-    if not paths:
-        return ""
-    first, _, _ = paths[0].partition(".")
-    if not first or first == paths[0]:
-        return ""
-    candidate = first + "."
-    for p in paths:
-        if not p.startswith(candidate):
-            return ""
-    return candidate
-
-
 def resolve(src: WaveformSource, config: ViewConfig) -> ResolvedView:
-    """Bind YAML signal paths to actual SignalRefs and clamp the time window."""
+    """Bind YAML signal paths to actual SignalRefs and clamp the time window.
+
+    Hierarchy brackets are computed per user-group; each track's default label
+    drops the components absorbed by enclosing brackets so the visible label
+    is the shortest unambiguous suffix.
+    """
     groups_in = config.groups or default_groups_for(src.signals())
 
-    # Pass 1: bind signals, remember which labels were user-supplied vs default.
     intermediate: List[Tuple[Optional[str], List[Tuple[SignalRef, Optional[str], str, Optional[str]]]]] = []
     for g in groups_in:
         rows: List[Tuple[SignalRef, Optional[str], str, Optional[str]]] = []
@@ -71,21 +79,20 @@ def resolve(src: WaveformSource, config: ViewConfig) -> ResolvedView:
             rows.append((ref, s.label, s.format, s.color))
         intermediate.append((g.name, rows))
 
-    # Pass 2: strip a shared top-level scope from default labels only.
-    all_paths = [ref.full_path for _, rows in intermediate for ref, _, _, _ in rows]
-    prefix = _common_top_prefix(all_paths)
-
+    brackets_per_group: List[List[BracketSpec]] = []
     resolved_groups: List[Tuple[Optional[str], List[Tuple[SignalRef, str, str, Optional[str]]]]] = []
     for name, rows in intermediate:
+        paths = [ref.full_path for ref, _, _, _ in rows]
+        specs, consumed = compute_brackets(paths)
+        brackets_per_group.append(specs)
         out_rows: List[Tuple[SignalRef, str, str, Optional[str]]] = []
-        for ref, user_label, fmt, color in rows:
+        for idx, (ref, user_label, fmt, color) in enumerate(rows):
             if user_label is not None:
                 label = user_label
-            elif prefix and ref.full_path.startswith(prefix):
-                stripped = ref.full_path[len(prefix):]
-                label = stripped or ref.full_path
             else:
-                label = ref.full_path
+                parts = ref.full_path.split(".")
+                stripped = ".".join(parts[consumed[idx]:])
+                label = stripped or ref.full_path
             out_rows.append((ref, label, fmt, color))
         resolved_groups.append((name, out_rows))
 
@@ -94,12 +101,20 @@ def resolve(src: WaveformSource, config: ViewConfig) -> ResolvedView:
     if t_to <= t_from:
         t_to = t_from + 1
 
-    return ResolvedView(src=src, config=config, groups=resolved_groups, t_from=t_from, t_to=t_to)
+    return ResolvedView(
+        src=src,
+        config=config,
+        groups=resolved_groups,
+        brackets_per_group=brackets_per_group,
+        t_from=t_from,
+        t_to=t_to,
+    )
 
 
 def render(view: ResolvedView, out_svg: Path, out_png: Optional[Path] = None) -> None:
     """Render to SVG and (optionally) PNG."""
-    geom = lay_out(view.config, view.groups, view.t_from, view.t_to)
+    label_w = _measure_label_w(view.groups)
+    geom = lay_out(view.config, view.groups, view.t_from, view.t_to, view.brackets_per_group, label_w=label_w)
 
     out_svg.parent.mkdir(parents=True, exist_ok=True)
     svg = cairo.SVGSurface(str(out_svg), geom.width, geom.height)
@@ -117,11 +132,33 @@ def render(view: ResolvedView, out_svg: Path, out_png: Optional[Path] = None) ->
         img.write_to_png(str(out_png))
 
 
+def _measure_label_w(groups) -> int:
+    """Measure the widest rendered label so the column hugs it.
+
+    Cairo needs a context to measure text; spin up a 1×1 alpha surface
+    just for that. Clamp to [LABEL_MIN_W, LABEL_MAX_W] so an unstripped
+    monster path still leaves room for the trace, and so an empty group
+    list doesn't collapse the column to zero.
+    """
+    surf = cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)
+    ctx = cairo.Context(surf)
+    ctx.select_font_face(FONT_FAMILY, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_font_size(FONT_SIZE)
+    widest = 0.0
+    for _, sigs in groups:
+        for _, label, _, _ in sigs:
+            tw = ctx.text_extents(label)[2]
+            if tw > widest:
+                widest = tw
+    return min(max(int(math.ceil(widest)), LABEL_MIN_W), LABEL_MAX_W)
+
+
 def _draw(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> None:
     ctx.select_font_face(FONT_FAMILY, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.set_font_size(FONT_SIZE)
 
     _draw_time_axis(view, geom, ctx)
+    _draw_brackets(geom, ctx)
 
     for block in geom.groups:
         if block.name:
@@ -158,6 +195,58 @@ def _draw_time_axis(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> N
         t += step
 
 
+def _draw_brackets(geom: Geometry, ctx: cairo.Context) -> None:
+    if not geom.brackets:
+        return
+    ctx.set_font_size(BRACKET_FONT_SIZE)
+    for b in geom.brackets:
+        color = BRACKET_PALETTE[b.lane % len(BRACKET_PALETTE)]
+        x_lane_left = LEFT_PAD + b.lane * BRACKET_LANE_W
+        x_line = x_lane_left + 4
+        cap_len = 6
+
+        ctx.set_source_rgb(*color)
+        ctx.set_line_width(1.5)
+        ctx.move_to(x_line, b.y_top)
+        ctx.line_to(x_line, b.y_bot)
+        ctx.stroke()
+        ctx.move_to(x_line, b.y_top)
+        ctx.line_to(x_line + cap_len, b.y_top)
+        ctx.stroke()
+        ctx.move_to(x_line, b.y_bot)
+        ctx.line_to(x_line + cap_len, b.y_bot)
+        ctx.stroke()
+
+        # Vertical (rotated −90°) label centered along the bracket.
+        cx = x_lane_left + BRACKET_LANE_W - 4
+        cy = (b.y_top + b.y_bot) / 2
+        max_h = max(0, b.y_bot - b.y_top - 4)
+        text = _fit_text(ctx, b.name, max_h)
+        _, _, tw, _, _, _ = ctx.text_extents(text)
+        fe = ctx.font_extents()
+        ascent, descent = fe[0], fe[1]
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(-math.pi / 2)
+        ctx.move_to(-tw / 2, (ascent - descent) / 2)
+        ctx.show_text(text)
+        ctx.restore()
+    ctx.set_font_size(FONT_SIZE)
+
+
+def _fit_text(ctx: cairo.Context, text: str, max_w: float) -> str:
+    """Right-truncate text with an ellipsis to fit max_w pixels."""
+    if max_w <= 0 or not text:
+        return ""
+    _, _, w, _, _, _ = ctx.text_extents(text)
+    if w <= max_w:
+        return text
+    s = text
+    while s and ctx.text_extents(s + "…")[2] > max_w:
+        s = s[:-1]
+    return s + "…" if s else "…"
+
+
 def _draw_group_header(name: str, y: int, geom: Geometry, ctx: cairo.Context) -> None:
     ctx.set_source_rgb(*GROUP_BG)
     ctx.rectangle(0, y, geom.width, GROUP_HEADER_H)
@@ -171,8 +260,9 @@ def _draw_group_header(name: str, y: int, geom: Geometry, ctx: cairo.Context) ->
 
 def _draw_label(track: Track, geom: Geometry, ctx: cairo.Context, row_h: int) -> None:
     ctx.set_source_rgb(*TEXT_COLOR)
-    ctx.move_to(LEFT_PAD, track.y + row_h - 8)
-    ctx.show_text(track.label)
+    text = _fit_text(ctx, track.label, geom.label_w)
+    ctx.move_to(geom.label_x, track.y + row_h - 8)
+    ctx.show_text(text)
 
 
 def _parse_color(spec: Optional[str]) -> Tuple[float, float, float]:
