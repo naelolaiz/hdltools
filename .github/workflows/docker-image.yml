@@ -90,7 +90,9 @@ jobs:
           docker run --rm "$IMG" waveview --version
 
           # 3. End-to-end render: GHDL produces a tiny VCD, waveview turns it
-          # into an SVG. Catches parser/renderer regressions before publish.
+          # into an SVG and PNG. Catches parser/renderer regressions before
+          # publish. The smoke fixture has all signals under module "smoke"
+          # so the hierarchy bracket code path is exercised on both outputs.
           docker run --rm -v "$PWD/waveview/tests/data:/in:ro" "$IMG" bash -c '
             set -e
             cd /tmp
@@ -98,9 +100,11 @@ jobs:
             ghdl -a smoke.vhd
             ghdl -e smoke
             ghdl -r smoke --vcd=smoke.vcd --stop-time=200ns
-            waveview smoke.vcd --output smoke.svg
+            waveview smoke.vcd --output smoke.svg --png
             test -s smoke.svg
+            test -s smoke.png
             grep -q "<svg" smoke.svg
+            test "$(head -c 4 smoke.png | od -An -tx1 | tr -d " \n")" = "89504e47"
           '
 
           # 4. Real yosys+ghdl synthesis on a minimal entity.

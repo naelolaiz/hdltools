@@ -1,5 +1,6 @@
 """Snapshot test: render smoke.vcd to SVG and byte-compare."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -20,13 +21,25 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# cairo numbers each surface it creates with a monotonic process-global
+# counter (id="surfaceN"), so the byte at that position depends on how
+# many cairo surfaces were built before this test ran. The counter is
+# not user-visible content, just an internal label, so normalise it
+# before comparing.
+_SURFACE_ID_RE = re.compile(rb'id="surface\d+"')
+
+
+def _normalize(svg: bytes) -> bytes:
+    return _SURFACE_ID_RE.sub(b'id="surface"', svg)
+
+
 def test_render_matches_snapshot(tmp_path: Path):
     src = WaveformSource(SMOKE)
     cfg = load_config(None, src.time_unit_exponent)
     view = resolve(src, cfg)
     out = tmp_path / "smoke.svg"
     render(view, out)
-    assert out.read_bytes() == EXPECTED.read_bytes(), (
+    assert _normalize(out.read_bytes()) == _normalize(EXPECTED.read_bytes()), (
         "smoke render diverged from snapshot. "
         "If the divergence is intentional, regenerate the snapshot inside the container "
         "(see waveview/README.md)."

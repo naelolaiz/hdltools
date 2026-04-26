@@ -159,11 +159,11 @@
 <path style="fill:none;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke:rgb(20%,45%,85%);stroke-opacity:1;stroke-miterlimit:10;" d="M 14 32 L 20 32 "/>
 <path style="fill:none;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke:rgb(20%,45%,85%);stroke-opacity:1;stroke-miterlimit:10;" d="M 14 100 L 20 100 "/>
 <g style="fill:rgb(20%,45%,85%);fill-opacity:1;">
-  <use xlink:href="#glyph1-1" x="27.460938" y="80.234375"/>
-  <use xlink:href="#glyph1-2" x="27.460938" y="74.213867"/>
-  <use xlink:href="#glyph1-3" x="27.460938" y="68.193359"/>
-  <use xlink:href="#glyph1-4" x="27.460938" y="62.172852"/>
-  <use xlink:href="#glyph1-5" x="27.460938" y="56.152344"/>
+  <use xlink:href="#glyph1-1" x="27.5" y="80.5"/>
+  <use xlink:href="#glyph1-2" x="27.5" y="74.479492"/>
+  <use xlink:href="#glyph1-3" x="27.5" y="68.458984"/>
+  <use xlink:href="#glyph1-4" x="27.5" y="62.438477"/>
+  <use xlink:href="#glyph1-5" x="27.5" y="56.417969"/>
 </g>
 <g style="fill:rgb(5%,5%,5%);fill-opacity:1;">
   <use xlink:href="#glyph0-9" x="28" y="46"/>
