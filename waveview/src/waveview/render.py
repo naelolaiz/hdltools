@@ -198,6 +198,15 @@ def _draw_time_axis(view: ResolvedView, geom: Geometry, ctx: cairo.Context) -> N
 def _draw_brackets(geom: Geometry, ctx: cairo.Context) -> None:
     if not geom.brackets:
         return
+    # Cairo's SVGSurface and ImageSurface can disagree on text_extents /
+    # font_extents because they pick up different font_options defaults
+    # (hinting, antialias). Letting _fit_text and the centring math read
+    # those off the live ctx makes SVG and PNG diverge: the SVG kept the
+    # full bracket name while the PNG truncated it (or shifted the rotated
+    # baseline). Measure on a private ImageSurface so both passes draw the
+    # same glyph string at the same offset.
+    meas = _bracket_measurement_ctx()
+
     ctx.set_font_size(BRACKET_FONT_SIZE)
     for b in geom.brackets:
         color = BRACKET_PALETTE[b.lane % len(BRACKET_PALETTE)]
@@ -221,9 +230,9 @@ def _draw_brackets(geom: Geometry, ctx: cairo.Context) -> None:
         cx = x_lane_left + BRACKET_LANE_W - 4
         cy = (b.y_top + b.y_bot) / 2
         max_h = max(0, b.y_bot - b.y_top - 4)
-        text = _fit_text(ctx, b.name, max_h)
-        _, _, tw, _, _, _ = ctx.text_extents(text)
-        fe = ctx.font_extents()
+        text = _fit_text(meas, b.name, max_h)
+        _, _, tw, _, _, _ = meas.text_extents(text)
+        fe = meas.font_extents()
         ascent, descent = fe[0], fe[1]
         ctx.save()
         ctx.translate(cx, cy)
@@ -232,6 +241,14 @@ def _draw_brackets(geom: Geometry, ctx: cairo.Context) -> None:
         ctx.show_text(text)
         ctx.restore()
     ctx.set_font_size(FONT_SIZE)
+
+
+def _bracket_measurement_ctx() -> cairo.Context:
+    surf = cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)
+    ctx = cairo.Context(surf)
+    ctx.select_font_face(FONT_FAMILY, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_font_size(BRACKET_FONT_SIZE)
+    return ctx
 
 
 def _fit_text(ctx: cairo.Context, text: str, max_w: float) -> str:
