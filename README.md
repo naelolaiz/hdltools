@@ -115,6 +115,13 @@ entity with the same name as the file (minus the `.vhd` extension).
 vhd2svg.sh input.vhd [output.svg]
 ```
 
+From the published container:
+
+```
+podman run --rm -it -v "$PWD:/work" -w /work \
+  ghcr.io/naelolaiz/hdltools:release /tools/vhd2svg.sh my_design.vhd
+```
+
 Under the hood it runs:
 
 ```
