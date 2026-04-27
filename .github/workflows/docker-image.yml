@@ -80,9 +80,48 @@ jobs:
             set -e
             for t in make cmake gcc g++ git pkg-config bison flex patch xz \
                      tar awk sed find python3 perl \
-                     ghdl yosys iverilog netlistsvg waveview; do
+                     ghdl yosys iverilog vvp verilator slang netlistsvg waveview; do
               command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
             done
+            # iverilog must be at least v12 (built from source); apt v11
+            # has limited FST output and rejects the "vvp <vvp> -fst"
+            # extended-arg form. Guard against a silent fallback to apt.
+            iverilog -V 2>&1 | head -1 | grep -qE "version 1[2-9]" \
+              || { iverilog -V; echo "iverilog is older than v12"; exit 1; }
+            # Verilator must be v5.x (the SV-2017 verification subset
+            # support landed in 5.x; 4.x would silently miss many
+            # constructs the SV smoke fixture exercises).
+            verilator --version 2>&1 | head -1 | grep -qE "Verilator 5" \
+              || { verilator --version; echo "verilator is not v5.x"; exit 1; }
+          '
+
+          # 1b. iverilog FST output: compile the fixture, run under vvp,
+          # confirm the dump is in FST format (not just a .fst-named VCD).
+          # The -fst flag is an *extended argument* and must come AFTER
+          # the input .vvp file; if it comes before, vvp parses it as a
+          # short-option group (-f -s -t) and rejects -f / -t.
+          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+            set -e
+            cd /tmp
+            cp /test/fst_smoke.v .
+            iverilog -o fst_smoke.vvp fst_smoke.v
+            vvp fst_smoke.vvp -fst
+            test -s smoke.fst
+            # FST is binary; VCD starts with "$date". Catch a silent
+            # fallback to VCD-with-.fst-extension.
+            if head -c 100 smoke.fst | grep -q "\$date"; then
+              echo "FAIL: smoke.fst is VCD, not FST"; exit 1
+            fi
+          '
+
+          # 1c. SystemVerilog: Verilator and slang must both lint a
+          # non-trivial SV-2017 design (typedef, packed struct, always_ff,
+          # struct literals). Catches a v5/v4 verilator slip or a missing
+          # slang install in the runtime image.
+          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+            set -e
+            verilator --lint-only --top sv_smoke /test/sv_smoke.sv
+            slang --top sv_smoke /test/sv_smoke.sv
           '
 
           # 2. waveview imports cleanly (catches missing pywellen/pycairo/yaml).

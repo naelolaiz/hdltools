@@ -26,6 +26,84 @@ RUN git clone https://github.com/ghdl/ghdl-yosys-plugin.git \
  && make -C ghdl-yosys-plugin install
 
 
+# ---- Build Icarus Verilog from source ----
+# Ubuntu 22.04 apt ships iverilog 11.0; we want FST waveform output via
+# `vvp <design>.vvp -fst`, which needs the system.vpi extended-arg
+# parser shipped in v12.0+ and is the default output recommendation for
+# GTKWave / Surfer. Pinned to v13_0 (stable, March 2026). Built on plain
+# ubuntu:22.04 to match the runtime base's libc/libstdc++ so the
+# resulting binaries drop straight into the runtime image.
+FROM docker.io/library/ubuntu:22.04 AS iverilog-builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates git build-essential autoconf gperf bison flex \
+      libreadline-dev zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG IVERILOG_REF=v13_0
+WORKDIR /src
+RUN git clone --depth 1 --branch "$IVERILOG_REF" \
+      https://github.com/steveicarus/iverilog.git \
+ && cd iverilog \
+ && sh autoconf.sh \
+ && ./configure --prefix=/opt/iverilog \
+ && make -j"$(nproc)" \
+ && make install
+
+
+# ---- Build Verilator from source ----
+# The only mature open-source SystemVerilog simulator. v5.x has solid
+# support for SV-2017's synthesizable subset plus much of the verification
+# subset (interfaces, packages, packed structs, classes-lite). Pinned to
+# the v5.048 release tag for reproducibility — bump to upgrade.
+FROM docker.io/library/ubuntu:22.04 AS verilator-builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates git build-essential autoconf bison flex \
+      perl python3 help2man libfl-dev libfl2 zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG VERILATOR_REF=v5.048
+WORKDIR /src
+RUN git clone --depth 1 --branch "$VERILATOR_REF" \
+      https://github.com/verilator/verilator.git \
+ && cd verilator \
+ && autoconf \
+ && ./configure --prefix=/opt/verilator \
+ && make -j"$(nproc)" \
+ && make install
+
+
+# ---- Build slang from source ----
+# Modern SystemVerilog 2017 parser/elaborator/linter. Best-in-class
+# conformance and very fast — useful as a standalone lint pass and as
+# the front-end yosys-slang plugs into for SV synthesis. Needs CMake
+# >= 3.20 and gcc >= 11; ubuntu 22.04 ships 3.22.1 / 11.4 so the default
+# toolchain is enough.
+FROM docker.io/library/ubuntu:22.04 AS slang-builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates git build-essential cmake python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG SLANG_REF=v10.0
+WORKDIR /src
+RUN git clone --depth 1 --branch "$SLANG_REF" \
+      https://github.com/MikePopoloski/slang.git \
+ && cmake -S slang -B slang/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/opt/slang \
+      -DSLANG_INCLUDE_TESTS=OFF \
+ && cmake --build slang/build --parallel "$(nproc)" \
+ && cmake --install slang/build --strip
+
+
 # ---- Runtime image ----
 FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
 ENV DEBIAN_FRONTEND=noninteractive
@@ -42,8 +120,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake git pkg-config patch xz-utils \
       tcl bison flex \
-      iverilog \
       nodejs npm \
+      perl \
       python3 python3-pip python3-cairo python3-yaml \
       fonts-dejavu-core \
       libfl2 libreadline8 libtcl8.6 \
@@ -56,6 +134,11 @@ RUN apt-get update \
 
 COPY --from=yosys-builder /usr/local/bin/yosys* /usr/local/bin/
 COPY --from=yosys-builder /usr/local/share/yosys/ /usr/local/share/yosys/
+
+COPY --from=iverilog-builder /opt/iverilog/ /opt/iverilog/
+COPY --from=verilator-builder /opt/verilator/ /opt/verilator/
+COPY --from=slang-builder /opt/slang/ /opt/slang/
+ENV PATH=/opt/iverilog/bin:/opt/verilator/bin:/opt/slang/bin:$PATH
 
 COPY vhd2svg.sh /tools/
 COPY waveview/ /tools/waveview/
