@@ -83,9 +83,9 @@ jobs:
                      ghdl yosys iverilog vvp verilator slang netlistsvg waveview; do
               command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
             done
-            # iverilog must be at least v12 (built from source); the apt
-            # v11 has limited FST output and won't accept "vvp <vvp> -fst"
-            # extended args. Guard against a silent fallback to apt.
+            # iverilog must be at least v12 (built from source); apt v11
+            # has limited FST output and rejects the "vvp <vvp> -fst"
+            # extended-arg form. Guard against a silent fallback to apt.
             iverilog -V 2>&1 | head -1 | grep -qE "version 1[2-9]" \
               || { iverilog -V; echo "iverilog is older than v12"; exit 1; }
             # Verilator must be v5.x (the SV-2017 verification subset
