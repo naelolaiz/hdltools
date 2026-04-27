@@ -85,12 +85,6 @@ Both linters parse the SystemVerilog 2017 subset (typedef, packed structs,
 `always_ff`, struct literals, parameterised int widths). See
 [`container/test/sv_smoke.sv`](container/test/sv_smoke.sv) for the CI fixture.
 
-### Synthesise a VHDL entity to an SVG schematic
-
-```
-podman run --rm -v "$PWD:/work" -w /work "$IMG" /tools/vhd2svg.sh my_design.vhd
-```
-
 ## Helper scripts
 
 ### `waveview`
@@ -151,19 +145,7 @@ to `main` (see
 | `ghcr.io/naelolaiz/hdltools:latest`  | latest build from `main` (rolling) |
 | `ghcr.io/naelolaiz/hdltools:release` | same as `latest`; what downstream repos pin to |
 | `ghcr.io/naelolaiz/hdltools:sha-<short>` | content-addressed per commit |
-
-### Migrating from `vcd2png`
-
-Earlier images bundled a GTKWave/Xvfb-based `vcd2png.py`. That tool was
-replaced by `waveview` (headless, deterministic, no X server) in commit
-`a146717`. The last image that still ships `vcd2png.py` is preserved as a
-parking spot for anyone still pinning to that pipeline:
-
-| Tag | What it is |
-| --- | --- |
-| `ghcr.io/naelolaiz/hdltools:vcd2png` | legacy backup at commit `a146717` |
-
-New work should use `:release` and `waveview`.
+| `ghcr.io/naelolaiz/hdltools:vcd2png` | **legacy backup** — last image that still bundled the GTKWave/Xvfb-based `vcd2png.py` (commit `a146717`). Kept as a parking spot for anyone still pinning to that pipeline. New work uses `:release` and the `waveview` tool inside it. |
 
 ## Future work
 
