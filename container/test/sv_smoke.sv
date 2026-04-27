@@ -1,8 +1,7 @@
-// SystemVerilog fixture used by the CI smoke test to confirm that
-// Verilator and slang can both lint a non-trivial SV-2017 design.
-// Exercises features that don't exist in plain Verilog-2005:
-// `logic`, `typedef struct packed`, struct literals, `always_ff`,
-// parameterised `int` widths, default port directions.
+// SystemVerilog fixture used by the CI smoke test. Exercises features
+// that don't exist in plain Verilog-2005: logic, typedef struct packed,
+// struct literals, always_ff, parameterised int widths, default port
+// directions. Both linters lint this in CI.
 typedef struct packed {
   logic       valid;
   logic [7:0] data;

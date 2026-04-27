@@ -10,7 +10,7 @@ paper over missing features in the underlying tools.
 | [GHDL](https://github.com/ghdl/ghdl) | VHDL analysis, elaboration, simulation |
 | [Yosys](https://github.com/YosysHQ/yosys) | RTL synthesis (built from source) |
 | [ghdl-yosys-plugin](https://github.com/ghdl/ghdl-yosys-plugin) | Lets Yosys read VHDL via GHDL (built from source) |
-| [Icarus Verilog](https://github.com/steveicarus/iverilog) | Verilog simulation (v12, built from source — Ubuntu 22.04 apt is stuck on v11 which has weak FST support) |
+| [Icarus Verilog](https://github.com/steveicarus/iverilog) | Verilog simulation (v13, built from source — Ubuntu 22.04 apt is stuck on v11 which doesn't accept the `vvp <vvp> -fst` extended-arg form needed for FST output) |
 | [Verilator](https://github.com/verilator/verilator) | SystemVerilog 2017 simulator (v5.x, built from source — best-of-class open-source SV simulator; cycle-accurate, compiles SV → C++) |
 | [slang](https://github.com/MikePopoloski/slang) | SystemVerilog 2017 parser/elaborator/linter (v10.x, built from source — modern, fast, and the front-end for the yosys-slang synthesis path) |
 | [netlistsvg](https://github.com/nturley/netlistsvg) | Render Yosys JSON netlists as SVG |

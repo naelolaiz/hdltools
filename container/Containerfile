@@ -26,12 +26,13 @@ RUN git clone https://github.com/ghdl/ghdl-yosys-plugin.git \
  && make -C ghdl-yosys-plugin install
 
 
-# ---- Build Icarus Verilog v12 from source ----
-# Ubuntu 22.04 apt ships iverilog 11.0, which has limited FST output support.
-# v12 makes FST a first-class dump format and fixes a number of $dumpfile /
-# $dumpvars edge cases. Pinned to the v12_0 release tag for reproducibility.
-# Built on plain ubuntu:22.04 (matching the runtime base's libc/libstdc++) so
-# the resulting binaries drop straight into the runtime image.
+# ---- Build Icarus Verilog from source ----
+# Ubuntu 22.04 apt ships iverilog 11.0; we want FST waveform output via
+# `vvp <design>.vvp -fst`, which needs the system.vpi extended-arg
+# parser shipped in v12.0+ and is the default output recommendation for
+# GTKWave / Surfer. Pinned to v13_0 (stable, March 2026). Built on plain
+# ubuntu:22.04 to match the runtime base's libc/libstdc++ so the
+# resulting binaries drop straight into the runtime image.
 FROM docker.io/library/ubuntu:22.04 AS iverilog-builder
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -41,7 +42,7 @@ RUN apt-get update \
       libreadline-dev zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
-ARG IVERILOG_REF=v12_0
+ARG IVERILOG_REF=v13_0
 WORKDIR /src
 RUN git clone --depth 1 --branch "$IVERILOG_REF" \
       https://github.com/steveicarus/iverilog.git \
