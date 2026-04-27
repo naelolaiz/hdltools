@@ -1,7 +1,25 @@
 # hdltools
 
-Container with open-source HDL tools, plus a couple of helper scripts that
-paper over missing features in the underlying tools.
+[![Build status](https://github.com/naelolaiz/hdltools/actions/workflows/docker-image.yml/badge.svg?branch=main)](https://github.com/naelolaiz/hdltools/actions/workflows/docker-image.yml)
+
+Container image with an open-source HDL toolchain for VHDL, Verilog, and
+SystemVerilog — GHDL, Yosys (with the GHDL plugin), Icarus Verilog,
+Verilator, and slang — plus `waveview`, a deterministic headless
+VCD/FST/GHW renderer, and `vhd2svg.sh` for rendering VHDL entities as
+SVG schematics.
+
+## Quickstart
+
+The image is published to GitHub Container Registry on every push to `main`,
+so the fast path is to pull, not build:
+
+```
+podman pull ghcr.io/naelolaiz/hdltools:release
+podman run --rm -it -v "$PWD:/work" -w /work \
+  ghcr.io/naelolaiz/hdltools:release waveview my_dump.vcd
+```
+
+(or `docker` in place of `podman` if you prefer)
 
 ## What's inside
 
@@ -23,6 +41,55 @@ Icarus Verilog, Verilator, and slang are also built from source: apt's
 `iverilog` predates the FST output rework, apt's `verilator` is too old
 for the SystemVerilog 2017 verification subset, and `slang` isn't packaged
 on Ubuntu 22.04 at all.
+
+## Using the toolchain
+
+All examples assume `IMG=ghcr.io/naelolaiz/hdltools:release` and that the
+input file is in the current directory.
+
+### VHDL: simulate with GHDL, render the wave
+
+```
+podman run --rm -v "$PWD:/work" -w /work "$IMG" bash -c '
+  ghdl -a smoke.vhd
+  ghdl -e smoke
+  ghdl -r smoke --vcd=smoke.vcd --stop-time=200ns
+  waveview smoke.vcd --png
+'
+```
+
+### Verilog: simulate with Icarus Verilog, dump FST
+
+```
+podman run --rm -v "$PWD:/work" -w /work "$IMG" bash -c '
+  iverilog -o smoke.vvp smoke.v
+  vvp smoke.vvp -fst        # -fst MUST come AFTER the .vvp file
+  waveview smoke.fst --png
+'
+```
+
+The `-fst` flag is an extended argument and must follow the `.vvp` file; if
+it comes first, `vvp` parses it as a short-option group (`-f -s -t`) and
+errors out.
+
+### SystemVerilog: lint with Verilator and slang
+
+```
+podman run --rm -v "$PWD:/work" -w /work "$IMG" bash -c '
+  verilator --lint-only --top sv_smoke sv_smoke.sv
+  slang     --top sv_smoke sv_smoke.sv
+'
+```
+
+Both linters parse the SystemVerilog 2017 subset (typedef, packed structs,
+`always_ff`, struct literals, parameterised int widths). See
+[`container/test/sv_smoke.sv`](container/test/sv_smoke.sv) for the CI fixture.
+
+### Synthesise a VHDL entity to an SVG schematic
+
+```
+podman run --rm -v "$PWD:/work" -w /work "$IMG" /tools/vhd2svg.sh my_design.vhd
+```
 
 ## Helper scripts
 
@@ -66,15 +133,16 @@ The `-m ghdl` flag is what loads the GHDL plugin into Yosys — easy to miss,
 see the
 [ghdl-yosys-plugin README](https://github.com/ghdl/ghdl-yosys-plugin/blob/master/README.md).
 
-## Building the container
+## Building the container yourself
 
 ```
 podman build -t hdltools -f container/Containerfile .
 # or: docker build -t hdltools -f container/Containerfile .
 ```
 
-CI builds and publishes the image to GitHub Container Registry on every push to
-`main` (see `.github/workflows/docker-image.yml`).
+CI builds and publishes the image to GitHub Container Registry on every push
+to `main` (see
+[`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml)).
 
 ### Published tags
 
@@ -83,26 +151,28 @@ CI builds and publishes the image to GitHub Container Registry on every push to
 | `ghcr.io/naelolaiz/hdltools:latest`  | latest build from `main` (rolling) |
 | `ghcr.io/naelolaiz/hdltools:release` | same as `latest`; what downstream repos pin to |
 | `ghcr.io/naelolaiz/hdltools:sha-<short>` | content-addressed per commit |
-| `ghcr.io/naelolaiz/hdltools:vcd2png` | **legacy backup** — last image that still bundled the GTKWave/Xvfb-based `vcd2png.py` (commit `a146717`). Kept as a parking spot for anyone still pinning to that pipeline. New work uses `:release` and the `waveview` tool inside it. |
 
-## Running
+### Migrating from `vcd2png`
 
-Mount your working directory and run the tool you want:
+Earlier images bundled a GTKWave/Xvfb-based `vcd2png.py`. That tool was
+replaced by `waveview` (headless, deterministic, no X server) in commit
+`a146717`. The last image that still ships `vcd2png.py` is preserved as a
+parking spot for anyone still pinning to that pipeline:
 
-```
-podman run --rm -it -v "$PWD:/work" -w /work hdltools /tools/vhd2svg.sh my_design.vhd
-podman run --rm -it -v "$PWD:/work" -w /work hdltools waveview my_dump.vcd
-```
+| Tag | What it is |
+| --- | --- |
+| `ghcr.io/naelolaiz/hdltools:vcd2png` | legacy backup at commit `a146717` |
 
-## Ideas / TODO
+New work should use `:release` and `waveview`.
 
-- Base the image on [oss-cad-suite-build](https://github.com/YosysHQ/oss-cad-suite-build)
-  or [ghdl/docker](https://github.com/ghdl/docker) instead of installing
-  things by hand.
-- Survey [hdl/containers](https://hdl.github.io/containers/) — in particular
-  [f4pga](https://hdl.github.io/containers/ug/AllInOne.html).
-- Look at alternative RTL visualisers:
-  [hwtGraph](https://github.com/Nic30/hwtGraph),
-  [hdelk](https://davidthings.github.io/hdelk/),
-  and the netlistsvg tips at
-  [eowyn.net](https://blog.eowyn.net/improving_netlistsvg/).
+## Future work
+
+Tracked in [GitHub Issues](https://github.com/naelolaiz/hdltools/issues).
+Areas of interest: rebasing on
+[oss-cad-suite-build](https://github.com/YosysHQ/oss-cad-suite-build) or
+[ghdl/docker](https://github.com/ghdl/docker), surveying
+[hdl/containers](https://hdl.github.io/containers/), and exploring
+alternative RTL visualisers
+([hwtGraph](https://github.com/Nic30/hwtGraph),
+[hdelk](https://davidthings.github.io/hdelk/),
+[netlistsvg tips](https://blog.eowyn.net/improving_netlistsvg/)).

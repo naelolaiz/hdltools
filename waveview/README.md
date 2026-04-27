@@ -3,11 +3,6 @@
 Headless, deterministic waveform renderer. Reads VCD / FST / GHW (via
 `pywellen`), renders to SVG and PNG (via `pycairo`).
 
-Phase 0 of the longer-term virtual-board effort: the parser layer
-(`WaveformSource`) is the load-bearing abstraction that Phase 1's board
-renderer will reuse unchanged. See [PR description / commit message] for
-context.
-
 ## Install (inside the hdltools container)
 
 The container's `Containerfile` runs `pip install /tools/waveview/`, so
@@ -67,8 +62,9 @@ for t in range(0, src.t_max(), 5_000):
     print(t, cur.value_int(counter))
 ```
 
-`WaveformSource`, `SignalRef`, and `TimeCursor` are intentionally minimal —
-Phase 1's `BoardRenderer` will consume the same surface.
+`WaveformSource`, `SignalRef`, and `TimeCursor` are intentionally minimal so
+they can be reused by future renderers (e.g. a virtual-board view) without
+changes to the parser layer.
 
 ## Snapshot test
 
