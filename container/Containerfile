@@ -107,6 +107,10 @@ RUN git clone --depth 1 --branch "$SLANG_REF" \
 # ---- Runtime image ----
 FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
 ENV DEBIAN_FRONTEND=noninteractive
+# Install netlistsvg from the hierarchical fork — gives clickable
+# submodule drilldown pages with external port markers. Pinned to the
+# tagged snapshot so bumps are deliberate.
+ARG NETLISTSVG_REF=hierarchy-drilldown-v1
 
 # libghdl has its std/ieee path baked in from GHDL's own CI build
 # (/home/runner/work/ghdl/ghdl/...) so the yosys -m ghdl pipeline can't
@@ -128,7 +132,7 @@ RUN apt-get update \
  && pip3 install --no-cache-dir --upgrade pip setuptools wheel \
  && pip3 install --no-cache-dir \
       'pywellen ~= 0.20' \
- && npm install -g --no-fund --no-audit netlistsvg \
+ && npm install -g --no-fund --no-audit "git+https://github.com/naelolaiz/netlistsvg.git#$NETLISTSVG_REF" \
  && npm cache clean --force \
  && rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache
 

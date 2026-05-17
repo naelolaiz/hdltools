@@ -11,7 +11,8 @@ name: Create and publish a Docker image
 
 on:
   push:
-    branches: ['main']
+    branches:
+      - '**'
   pull_request:
     paths:
       - 'container/**'
@@ -52,12 +53,13 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Every push to main updates :latest and :release so downstream
-          # repos pinning :release actually get new builds, plus a
-          # content-addressed :sha-<SHA> tag for reproducibility.
+          # Every branch push publishes a branch-derived tag. The default
+          # branch also updates :latest and :release.
+          # All pushed images also get a content-addressed :sha-<SHA> tag.
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=release,enable={{is_default_branch}}
+            type=ref,event=branch,enable=${{ github.event_name == 'push' }}
             type=sha,prefix=sha-
 
       - name: Build image for testing (not pushed)
@@ -156,7 +158,7 @@ jobs:
             test -s /tmp/out/ping.json
           '
 
-      - name: Push image (only on push to main)
+      - name: Push image (only on configured push branches)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v7
         with:
@@ -166,3 +168,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
