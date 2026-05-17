@@ -109,12 +109,12 @@ FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
 ENV DEBIAN_FRONTEND=noninteractive
 # Install netlistsvg from the hierarchical fork — gives clickable
 # submodule drilldown pages with external port markers. Pinned to the
-# tagged snapshot so bumps are deliberate. The SHA below records the
-# commit the tag currently resolves to, both for traceability and to
-# bust the Docker layer cache when the tag is re-pointed.
-# tag hierarchy-drilldown-v1 -> 472791b (drilldown pages render at
-#                                        native size, not scaled to outer)
+# tagged snapshot so bumps are deliberate; NETLISTSVG_REF_SHA records
+# the commit the tag currently resolves to and is referenced inside
+# the RUN below to invalidate the Docker layer cache when the tag is
+# re-pointed.
 ARG NETLISTSVG_REF=hierarchy-drilldown-v1
+ARG NETLISTSVG_REF_SHA=472791b44884458ccae5f8046229afbb61db0050
 
 # libghdl has its std/ieee path baked in from GHDL's own CI build
 # (/home/runner/work/ghdl/ghdl/...) so the yosys -m ghdl pipeline can't
@@ -136,6 +136,7 @@ RUN apt-get update \
  && pip3 install --no-cache-dir --upgrade pip setuptools wheel \
  && pip3 install --no-cache-dir \
       'pywellen ~= 0.20' \
+ && echo "netlistsvg tag-snapshot SHA: $NETLISTSVG_REF_SHA" \
  && npm install -g --no-fund --no-audit "git+https://github.com/naelolaiz/netlistsvg.git#$NETLISTSVG_REF" \
  && npm cache clean --force \
  && rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache
