@@ -109,7 +109,11 @@ FROM docker.io/ghdl/ghdl:6.0.0-llvm-ubuntu-22.04
 ENV DEBIAN_FRONTEND=noninteractive
 # Install netlistsvg from the hierarchical fork — gives clickable
 # submodule drilldown pages with external port markers. Pinned to the
-# tagged snapshot so bumps are deliberate.
+# tagged snapshot so bumps are deliberate. The SHA below records the
+# commit the tag currently resolves to, both for traceability and to
+# bust the Docker layer cache when the tag is re-pointed.
+# tag hierarchy-drilldown-v1 -> 472791b (drilldown pages render at
+#                                        native size, not scaled to outer)
 ARG NETLISTSVG_REF=hierarchy-drilldown-v1
 
 # libghdl has its std/ieee path baked in from GHDL's own CI build
