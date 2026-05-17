@@ -151,6 +151,7 @@ to `main` (see
 | --- | --- |
 | `ghcr.io/naelolaiz/hdltools:latest`  | latest build from `main` (rolling) |
 | `ghcr.io/naelolaiz/hdltools:release` | same as `latest`; what downstream repos pin to |
+| `ghcr.io/naelolaiz/hdltools:<branch>` | branch-derived test image for each pushed branch; invalid Docker tag characters are normalized by `docker/metadata-action` |
 | `ghcr.io/naelolaiz/hdltools:sha-<short>` | content-addressed per commit |
 | `ghcr.io/naelolaiz/hdltools:vcd2png` | **legacy backup** — last image that still bundled the GTKWave/Xvfb-based `vcd2png.py` (commit `a146717`). Kept as a parking spot for anyone still pinning to that pipeline. New work uses `:release` and the `waveview` tool inside it. |
 
