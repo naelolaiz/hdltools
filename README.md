@@ -6,7 +6,9 @@ Container image with an open-source HDL toolchain for VHDL, Verilog, and
 SystemVerilog — GHDL, Yosys (with the GHDL plugin), Icarus Verilog,
 Verilator, and slang — plus `waveview`, a deterministic headless
 VCD/FST/GHW renderer, and `vhd2svg.sh` for rendering VHDL entities as
-SVG schematics.
+SVG schematics. The default image combines the full toolchain; the same
+Containerfile also exposes smaller single-purpose targets for UNIX-style
+composition.
 
 ## Quickstart
 
@@ -41,6 +43,23 @@ Icarus Verilog, Verilator, and slang are also built from source: apt's
 `iverilog` predates the FST output rework, apt's `verilator` is too old
 for the SystemVerilog 2017 verification subset, and `slang` isn't packaged
 on Ubuntu 22.04 at all.
+
+### Container targets
+
+The Containerfile has named final targets that can be built independently
+or composed into the default `hdltools` target.
+
+| Target | Contents |
+| --- | --- |
+| `ghdl` | GHDL plus small shell/Python/make basics |
+| `yosys` | `ghdl` plus Yosys and `ghdl-yosys-plugin` |
+| `iverilog` | Icarus Verilog and `vvp` |
+| `verilator` | Verilator plus the C++/make runtime needed to build simulations |
+| `slang` | slang SystemVerilog parser/linter |
+| `netlistsvg` | Node runtime plus the pinned hierarchical netlistsvg fork |
+| `waveview` | waveview in an isolated Python venv plus Cairo runtime libraries |
+| `vhd2svg` | `yosys` plus `netlistsvg` and `/tools/vhd2svg.sh` |
+| `hdltools` | The default all-in-one image, composed from the module artifacts |
 
 ## Using the toolchain
 
@@ -126,8 +145,8 @@ Under the hood it runs:
 
 ```
 ghdl -a --std=08 input.vhd
-yosys -m ghdl -p 'ghdl --std=08 <entity>; prep -top <entity>; write_json -compat-int <entity>_svg.json'
-netlistsvg <entity>_svg.json -o <entity>_diagram.svg
+yosys -m ghdl -p 'ghdl --std=08 <entity>; prep -top <entity>; write_json -compat-int <output_dir>/<entity>_svg.json'
+netlistsvg <output_dir>/<entity>_svg.json -o <output.svg>
 ```
 
 The `-m ghdl` flag is what loads the GHDL plugin into Yosys — easy to miss,
@@ -139,6 +158,14 @@ see the
 ```
 podman build -t hdltools -f container/Containerfile .
 # or: docker build -t hdltools -f container/Containerfile .
+```
+
+Build a single module by selecting its target:
+
+```
+podman build -t hdltools-waveview -f container/Containerfile --target waveview .
+podman build -t hdltools-iverilog -f container/Containerfile --target iverilog .
+podman build -t hdltools-vhd2svg -f container/Containerfile --target vhd2svg .
 ```
 
 CI builds and publishes the image to GitHub Container Registry on every push
@@ -153,6 +180,8 @@ to `main` (see
 | `ghcr.io/naelolaiz/hdltools:release` | same as `latest`; what downstream repos pin to |
 | `ghcr.io/naelolaiz/hdltools:<branch>` | branch-derived test image for each pushed branch; invalid Docker tag characters are normalized by `docker/metadata-action` |
 | `ghcr.io/naelolaiz/hdltools:sha-<short>` | content-addressed per commit |
+| `ghcr.io/naelolaiz/hdltools:release-<target>` | module image for a named target, for example `release-waveview` or `release-iverilog` |
+| `ghcr.io/naelolaiz/hdltools:<branch>-<target>` | branch-derived module image for each pushed branch |
 | `ghcr.io/naelolaiz/hdltools:vcd2png` | **legacy backup** — last image that still bundled the GTKWave/Xvfb-based `vcd2png.py` (commit `a146717`). Kept as a parking spot for anyone still pinning to that pipeline. New work uses `:release` and the `waveview` tool inside it. |
 
 ## Future work
