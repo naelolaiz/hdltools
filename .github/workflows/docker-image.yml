@@ -30,6 +30,37 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: hdltools
+            tag_suffix: ''
+            local_tag: hdltools:ci-test
+          - target: ghdl
+            tag_suffix: -ghdl
+            local_tag: hdltools-ghdl:ci-test
+          - target: yosys
+            tag_suffix: -yosys
+            local_tag: hdltools-yosys:ci-test
+          - target: iverilog
+            tag_suffix: -iverilog
+            local_tag: hdltools-iverilog:ci-test
+          - target: verilator
+            tag_suffix: -verilator
+            local_tag: hdltools-verilator:ci-test
+          - target: slang
+            tag_suffix: -slang
+            local_tag: hdltools-slang:ci-test
+          - target: netlistsvg
+            tag_suffix: -netlistsvg
+            local_tag: hdltools-netlistsvg:ci-test
+          - target: waveview
+            tag_suffix: -waveview
+            local_tag: hdltools-waveview:ci-test
+          - target: vhd2svg
+            tag_suffix: -vhd2svg
+            local_tag: hdltools-vhd2svg:ci-test
 
     steps:
       - name: Checkout repository
@@ -53,8 +84,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.tag_suffix }},onlatest=true
           # Every branch push publishes a branch-derived tag. The default
-          # branch also updates :latest and :release.
+          # branch also updates :latest and :release. Module images append
+          # their target name as a suffix, for example :release-waveview.
           # All pushed images also get a content-addressed :sha-<SHA> tag.
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
@@ -62,110 +96,211 @@ jobs:
             type=ref,event=branch,enable=${{ github.event_name == 'push' }}
             type=sha,prefix=sha-
 
-      - name: Build image for testing (not pushed)
+      - name: Build image target for testing (not pushed)
         uses: docker/build-push-action@v7
         with:
           context: .
           file: container/Containerfile
+          target: ${{ matrix.target }}
           load: true
-          tags: hdltools:ci-test
+          tags: ${{ matrix.local_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke-test the built image
+      - name: Smoke-test the built image target
+        env:
+          IMG: ${{ matrix.local_tag }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euxo pipefail
-          IMG=hdltools:ci-test
 
-          # 1. Toolchain + HDL tool presence. Any missing tool fails the job.
-          docker run --rm "$IMG" bash -c '
-            set -e
-            for t in make cmake gcc g++ git pkg-config bison flex patch xz \
-                     tar awk sed find python3 perl \
-                     ghdl yosys iverilog vvp verilator slang netlistsvg waveview; do
-              command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
-            done
-            # iverilog must be at least v12 (built from source); apt v11
-            # has limited FST output and rejects the "vvp <vvp> -fst"
-            # extended-arg form. Guard against a silent fallback to apt.
-            iverilog -V 2>&1 | head -1 | grep -qE "version 1[2-9]" \
-              || { iverilog -V; echo "iverilog is older than v12"; exit 1; }
-            # Verilator must be v5.x (the SV-2017 verification subset
-            # support landed in 5.x; 4.x would silently miss many
-            # constructs the SV smoke fixture exercises).
-            verilator --version 2>&1 | head -1 | grep -qE "Verilator 5" \
-              || { verilator --version; echo "verilator is not v5.x"; exit 1; }
-          '
+          case "$TARGET" in
+            hdltools)
+              # 1. Toolchain + HDL tool presence. Any missing tool fails the job.
+              docker run --rm "$IMG" bash -c '
+                set -e
+                for t in make g++ tar awk sed find python3 perl \
+                         ghdl yosys iverilog vvp verilator slang netlistsvg waveview; do
+                  command -v "$t" >/dev/null || { echo "MISSING: $t"; exit 1; }
+                done
+                # iverilog must be at least v12 (built from source); apt v11
+                # has limited FST output and rejects the "vvp <vvp> -fst"
+                # extended-arg form. Guard against a silent fallback to apt.
+                iverilog -V 2>&1 | head -1 | grep -qE "version 1[2-9]" \
+                  || { iverilog -V; echo "iverilog is older than v12"; exit 1; }
+                # Verilator must be v5.x (the SV-2017 verification subset
+                # support landed in 5.x; 4.x would silently miss many
+                # constructs the SV smoke fixture exercises).
+                verilator --version 2>&1 | head -1 | grep -qE "Verilator 5" \
+                  || { verilator --version; echo "verilator is not v5.x"; exit 1; }
+              '
 
-          # 1b. iverilog FST output: compile the fixture, run under vvp,
-          # confirm the dump is in FST format (not just a .fst-named VCD).
-          # The -fst flag is an *extended argument* and must come AFTER
-          # the input .vvp file; if it comes before, vvp parses it as a
-          # short-option group (-f -s -t) and rejects -f / -t.
-          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
-            set -e
-            cd /tmp
-            cp /test/fst_smoke.v .
-            iverilog -o fst_smoke.vvp fst_smoke.v
-            vvp fst_smoke.vvp -fst
-            test -s smoke.fst
-            # FST is binary; VCD starts with "$date". Catch a silent
-            # fallback to VCD-with-.fst-extension.
-            if head -c 100 smoke.fst | grep -q "\$date"; then
-              echo "FAIL: smoke.fst is VCD, not FST"; exit 1
-            fi
-          '
+              # 1b. iverilog FST output: compile the fixture, run under vvp,
+              # confirm the dump is in FST format (not just a .fst-named VCD).
+              # The -fst flag is an *extended argument* and must come AFTER
+              # the input .vvp file; if it comes before, vvp parses it as a
+              # short-option group (-f -s -t) and rejects -f / -t.
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                cd /tmp
+                cp /test/fst_smoke.v .
+                iverilog -o fst_smoke.vvp fst_smoke.v
+                vvp fst_smoke.vvp -fst
+                test -s smoke.fst
+                # FST is binary; VCD starts with "$date". Catch a silent
+                # fallback to VCD-with-.fst-extension.
+                if head -c 100 smoke.fst | grep -q "\$date"; then
+                  echo "FAIL: smoke.fst is VCD, not FST"; exit 1
+                fi
+              '
 
-          # 1c. SystemVerilog: Verilator and slang must both lint a
-          # non-trivial SV-2017 design (typedef, packed struct, always_ff,
-          # struct literals). Catches a v5/v4 verilator slip or a missing
-          # slang install in the runtime image.
-          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
-            set -e
-            verilator --lint-only --top sv_smoke /test/sv_smoke.sv
-            slang --top sv_smoke /test/sv_smoke.sv
-          '
+              # 1c. SystemVerilog: Verilator and slang must both lint a
+              # non-trivial SV-2017 design (typedef, packed struct, always_ff,
+              # struct literals). Catches a v5/v4 verilator slip or a missing
+              # slang install in the runtime image.
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                verilator --lint-only --top sv_smoke /test/sv_smoke.sv
+                slang --top sv_smoke /test/sv_smoke.sv
+              '
 
-          # 2. waveview imports cleanly (catches missing pywellen/pycairo/yaml).
-          docker run --rm "$IMG" python3 -c 'import waveview, pywellen, cairo, yaml'
-          docker run --rm "$IMG" waveview --version
+              # 2. waveview imports cleanly (catches missing pywellen/pycairo/yaml).
+              docker run --rm "$IMG" /opt/waveview/bin/python -c 'import waveview, pywellen, cairo, yaml'
+              docker run --rm "$IMG" waveview --version
 
-          # 3. End-to-end render: GHDL produces a tiny VCD, waveview turns it
-          # into an SVG and PNG. Catches parser/renderer regressions before
-          # publish. The smoke fixture has all signals under module "smoke"
-          # so the hierarchy bracket code path is exercised on both outputs.
-          docker run --rm -v "$PWD/waveview/tests/data:/in:ro" "$IMG" bash -c '
-            set -e
-            cd /tmp
-            cp /in/smoke.vhd .
-            ghdl -a smoke.vhd
-            ghdl -e smoke
-            ghdl -r smoke --vcd=smoke.vcd --stop-time=200ns
-            waveview smoke.vcd --output smoke.svg --png
-            test -s smoke.svg
-            test -s smoke.png
-            grep -q "<svg" smoke.svg
-            test "$(head -c 4 smoke.png | od -An -tx1 | tr -d " \n")" = "89504e47"
-          '
+              # 3. End-to-end render: GHDL produces a tiny VCD, waveview turns it
+              # into an SVG and PNG. Catches parser/renderer regressions before
+              # publish. The smoke fixture has all signals under module "smoke"
+              # so the hierarchy bracket code path is exercised on both outputs.
+              docker run --rm -v "$PWD/waveview/tests/data:/in:ro" "$IMG" bash -c '
+                set -e
+                cd /tmp
+                cp /in/smoke.vhd .
+                ghdl -a smoke.vhd
+                ghdl -e smoke
+                ghdl -r smoke --vcd=smoke.vcd --stop-time=200ns
+                waveview smoke.vcd --output smoke.svg --png
+                test -s smoke.svg
+                test -s smoke.png
+                grep -q "<svg" smoke.svg
+                test "$(head -c 4 smoke.png | od -An -tx1 | tr -d " \n")" = "89504e47"
+              '
 
-          # 4. Real yosys+ghdl synthesis on a minimal entity.
-          # Guards against GHDL_PREFIX / library-path regressions and
-          # ghdl-yosys-plugin API skew with the base ghdl version.
-          docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
-            set -e
-            mkdir -p /tmp/out
-            yosys -m ghdl -p "ghdl --std=08 /test/ping.vhd -e ping; prep -top ping; write_json -compat-int /tmp/out/ping.json"
-            test -s /tmp/out/ping.json
-          '
+              # 4. Real yosys+ghdl synthesis on a minimal entity.
+              # Guards against GHDL_PREFIX / library-path regressions and
+              # ghdl-yosys-plugin API skew with the base ghdl version.
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                mkdir -p /tmp/out
+                yosys -m ghdl -p "ghdl --std=08 /test/ping.vhd -e ping; prep -top ping; write_json -compat-int /tmp/out/ping.json"
+                test -s /tmp/out/ping.json
+              '
 
-      - name: Push image (only on configured push branches)
+              # 5. The dedicated vhd2svg wrapper should drive GHDL, Yosys,
+              # and netlistsvg together from the default image.
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                cd /tmp
+                /tools/vhd2svg.sh /test/ping.vhd ping.svg
+                test -s ping.svg
+                grep -q "<svg" ping.svg
+              '
+              ;;
+
+            ghdl)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                command -v ghdl
+                cd /tmp
+                ghdl -a --std=08 /test/ping.vhd
+                ghdl -e --std=08 ping
+              '
+              ;;
+
+            yosys)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                command -v ghdl
+                command -v yosys
+                mkdir -p /tmp/out
+                yosys -m ghdl -p "ghdl --std=08 /test/ping.vhd -e ping; prep -top ping; write_json -compat-int /tmp/out/ping.json"
+                test -s /tmp/out/ping.json
+              '
+              ;;
+
+            iverilog)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                cd /tmp
+                cp /test/fst_smoke.v .
+                iverilog -V 2>&1 | head -1 | grep -qE "version 1[2-9]" \
+                  || { iverilog -V; echo "iverilog is older than v12"; exit 1; }
+                iverilog -o fst_smoke.vvp fst_smoke.v
+                vvp fst_smoke.vvp -fst
+                test -s smoke.fst
+                if head -c 100 smoke.fst | grep -q "\$date"; then
+                  echo "FAIL: smoke.fst is VCD, not FST"; exit 1
+                fi
+              '
+              ;;
+
+            verilator)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                verilator --version 2>&1 | head -1 | grep -qE "Verilator 5" \
+                  || { verilator --version; echo "verilator is not v5.x"; exit 1; }
+                verilator --lint-only --top sv_smoke /test/sv_smoke.sv
+              '
+              ;;
+
+            slang)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                command -v slang
+                slang --top sv_smoke /test/sv_smoke.sv
+              '
+              ;;
+
+            netlistsvg)
+              docker run --rm "$IMG" bash -c '
+                set -e
+                command -v netlistsvg
+                netlistsvg --help >/dev/null
+              '
+              ;;
+
+            waveview)
+              docker run --rm -v "$PWD/waveview/tests/data:/in:ro" "$IMG" bash -c '
+                set -e
+                /opt/waveview/bin/python -c "import waveview, pywellen, cairo, yaml"
+                waveview --version
+                cd /tmp
+                waveview /in/smoke.vcd --output smoke.svg --png
+                test -s smoke.svg
+                test -s smoke.png
+                grep -q "<svg" smoke.svg
+              '
+              ;;
+
+            vhd2svg)
+              docker run --rm -v "$PWD/container/test:/test:ro" "$IMG" bash -c '
+                set -e
+                cd /tmp
+                /tools/vhd2svg.sh /test/ping.vhd ping.svg
+                test -s ping.svg
+                grep -q "<svg" ping.svg
+              '
+              ;;
+          esac
+
+      - name: Push image target (only on configured push branches)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: container/Containerfile
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-
